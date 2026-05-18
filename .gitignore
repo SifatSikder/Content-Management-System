@@ -1,0 +1,45 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+.python-version
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# --- Node / Next.js ---
+node_modules/
+.next/
+.turbo/
+out/
+dist/
+build/
+
+# --- Editor / OS ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- Env / secrets ---
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+gcp-key*.json
+
+# --- App-local artifacts ---
+.dev-emails/
+.dev-storage/
+.tmp/
+
+# --- Generated ---
+openapi.json

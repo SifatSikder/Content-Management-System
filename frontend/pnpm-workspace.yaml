@@ -1,0 +1,13 @@
+packages: []
+allowBuilds:
+  '@parcel/watcher': true
+  '@swc/core': true
+  msw: true
+  sharp: true
+  unrs-resolver: true
+onlyBuiltDependencies:
+  - sharp
+  - unrs-resolver
+  - '@parcel/watcher'
+  - '@swc/core'
+  - msw

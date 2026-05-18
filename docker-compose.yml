@@ -1,0 +1,64 @@
+# Local dev stack: Postgres + Redis + fake-gcs-server (a GCS-compatible
+# emulator). All three pin volumes by name so data survives `down`.
+#
+# Brought up by `make up`, torn down by `make down`.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sre_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cms_app
+      POSTGRES_PASSWORD: cms_app
+      POSTGRES_DB: cms
+    # Host port 5433 to avoid colliding with a system Postgres on 5432.
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cms_app -d cms"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: sre_redis
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "cms_redis", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "cms_redis", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  fake-gcs:
+    # Local Google Cloud Storage emulator. The google-cloud-storage SDK will
+    # talk to this when STORAGE_EMULATOR_HOST is set (see app/config.py).
+    image: fsouza/fake-gcs-server:latest
+    container_name: sre_fake_gcs
+    restart: unless-stopped
+    command:
+      - "-scheme"
+      - "http"
+      - "-port"
+      - "4443"
+      - "-public-host"
+      - "localhost:4443"
+      - "-data"
+      - "/data"
+    ports:
+      - "4443:4443"
+    volumes:
+      - fake_gcs_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+  fake_gcs_data:

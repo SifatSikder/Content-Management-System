@@ -1,0 +1,13 @@
+{
+  "app": {
+    "name": "Sons Real Estate CMS",
+    "tagline": "Content productie systeem"
+  },
+  "home": {
+    "title": "Welkom",
+    "scaffold_note": "Phase 0 — lege scaffolding. Functies worden geactiveerd in Phase 1."
+  },
+  "theme": {
+    "toggle_aria": "Thema wisselen"
+  }
+}

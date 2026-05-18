@@ -1,0 +1,13 @@
+{
+  "app": {
+    "name": "Sons Real Estate CMS",
+    "tagline": "Content production system"
+  },
+  "home": {
+    "title": "Welcome",
+    "scaffold_note": "Phase 0 — empty scaffold. Features activate in Phase 1."
+  },
+  "theme": {
+    "toggle_aria": "Toggle theme"
+  }
+}
