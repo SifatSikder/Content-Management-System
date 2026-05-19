@@ -1,0 +1,62 @@
+import { apiFetchAuthed } from "@/lib/api-client";
+import type { PipelineStage } from "@/lib/enums";
+
+import type {
+  CreateProjectBody,
+  Project,
+  ProjectListResponse,
+  UpdateProjectBody,
+} from "./types";
+
+export interface ListProjectsParams {
+  stage?: PipelineStage;
+  owner_id?: string;
+  filter?: "mine";
+  cursor?: string;
+  limit?: number;
+}
+
+function qs(params: Record<string, unknown>): string {
+  const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== "");
+  if (entries.length === 0) return "";
+  const usp = new URLSearchParams();
+  for (const [k, v] of entries) usp.set(k, String(v));
+  return `?${usp.toString()}`;
+}
+
+export function listProjects(params: ListProjectsParams = {}): Promise<ProjectListResponse> {
+  return apiFetchAuthed<ProjectListResponse>(`/projects${qs({ ...params })}`);
+}
+
+export function getProject(id: string): Promise<Project> {
+  return apiFetchAuthed<Project>(`/projects/${id}`);
+}
+
+export function createProject(body: CreateProjectBody): Promise<Project> {
+  return apiFetchAuthed<Project>("/projects", {
+    method: "POST",
+    body: body as unknown as BodyInit,
+  });
+}
+
+export function updateProject(id: string, body: UpdateProjectBody): Promise<Project> {
+  return apiFetchAuthed<Project>(`/projects/${id}`, {
+    method: "PATCH",
+    body: body as unknown as BodyInit,
+  });
+}
+
+export function moveStage(id: string, stage: PipelineStage): Promise<Project> {
+  return apiFetchAuthed<Project>(`/projects/${id}/stage`, {
+    method: "POST",
+    body: { stage } as unknown as BodyInit,
+  });
+}
+
+export function deleteProject(id: string): Promise<void> {
+  return apiFetchAuthed<void>(`/projects/${id}`, { method: "DELETE" });
+}
+
+export function restoreProject(id: string): Promise<Project> {
+  return apiFetchAuthed<Project>(`/projects/${id}/restore`, { method: "POST" });
+}

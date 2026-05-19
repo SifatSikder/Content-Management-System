@@ -16,8 +16,12 @@ if [ ! -d "$SRC" ]; then
 fi
 
 # grep returns 1 when no matches found — we negate that so "no matches" = success.
+# Allowlist (in addition to api-client.ts):
+#   - resumable-upload.ts talks to GCS session URLs directly (not our backend),
+#     so it intentionally uses raw fetch with custom Content-Range headers.
 MATCHES=$(grep -rn --include='*.ts' --include='*.tsx' \
             --exclude='api-client.ts' \
+            --exclude='resumable-upload.ts' \
             -E '\bfetch\s*\(' \
             "$SRC" || true)
 
