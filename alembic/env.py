@@ -16,11 +16,17 @@ from app.config import get_settings
 from app.models import Base
 
 # --- Import every ORM module so autogenerate sees its tables. ---
-# Real entity models are added in Phase 1 Task 1.2. Add new imports here.
-# Example (Phase 1):
-#   from app.models import user as _user
-#   from app.models import project as _project
-
+# Add new imports here as new model files are created.
+from app.models import activity as _activity  # noqa: F401
+from app.models import cast_member as _cast_member  # noqa: F401
+from app.models import edit as _edit  # noqa: F401
+from app.models import location as _location  # noqa: F401
+from app.models import magic_link as _magic_link  # noqa: F401
+from app.models import notification as _notification  # noqa: F401
+from app.models import project as _project  # noqa: F401
+from app.models import script as _script  # noqa: F401
+from app.models import shoot as _shoot  # noqa: F401
+from app.models import user as _user  # noqa: F401
 
 config = context.config
 settings = get_settings()

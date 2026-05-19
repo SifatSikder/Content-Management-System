@@ -73,6 +73,16 @@ jobs:
       - name: Pytest
         run: uv run pytest
 
+      - name: Export OpenAPI schema
+        run: uv run python scripts/export_openapi.py openapi.json
+
+      - name: Upload OpenAPI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi
+          path: openapi.json
+          if-no-files-found: error
+
   frontend:
     name: frontend (lint + typecheck + build)
     runs-on: ubuntu-latest

@@ -97,11 +97,15 @@ typecheck: ## mypy on backend + tsc on frontend
 test: ## pytest backend + frontend tests (when present)
 	uv run pytest
 
+.PHONY: openapi
+openapi: ## export FastAPI OpenAPI schema to openapi.json
+	uv run python scripts/export_openapi.py openapi.json
+
 # --- Seed / one-offs --------------------------------------------------------
 
 .PHONY: seed
-seed: ## seed demo data (idempotent) — Phase 1+
-	@echo "seed_demo.py lands in Phase 1 Task 1.2.6."
+seed: ## seed demo data (idempotent)
+	uv run python scripts/seed_demo.py
 
 # --- Deployment (Phase 5) ---------------------------------------------------
 

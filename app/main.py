@@ -8,14 +8,16 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 
 from app.config import Settings, get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.middleware import RequestIDMiddleware
+from app.core.rate_limit import limiter, rate_limit_handler
 from app.models.base import dispose_engine, get_sessionmaker
-from app.routes import health
+from app.routes import auth, edits, health, projects, scripts
 
 log = structlog.get_logger(__name__)
 
@@ -82,8 +84,18 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
 
+    # Rate limiting (slowapi)
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
+
     # Routers.
     app.include_router(health.router)
+    app.include_router(auth.router)
+    app.include_router(projects.router)
+    app.include_router(scripts.projects_router)
+    app.include_router(scripts.scripts_router)
+    app.include_router(edits.projects_router)
+    app.include_router(edits.edits_router)
 
     return app
 

@@ -1,0 +1,95 @@
+"""Postgres enums shared across models.
+
+Enum *values* (lowercase strings) are what Postgres stores; the Python names
+are uppercase by Python convention. Names of the DB types (`name=` kwarg on
+SAEnum) are explicit so Alembic autogenerate produces stable migration code.
+
+Adding a new value requires a follow-up migration with `ALTER TYPE … ADD VALUE`
+— Alembic autogenerate cannot diff Postgres enums reliably, so write that
+migration by hand.
+"""
+
+from __future__ import annotations
+
+from enum import Enum, StrEnum
+
+from sqlalchemy import Enum as SAEnum
+
+
+def pg_enum(enum_cls: type[Enum], *, name: str) -> SAEnum:
+    """Build a Postgres-native enum that stores the Python enum's *value*.
+
+    Without `values_callable`, SQLAlchemy stores the enum member's `.name`
+    (uppercase) in the DB; we want the lowercase `.value` so wire payloads,
+    DB rows, and Python all agree on the same string form.
+    """
+    return SAEnum(
+        enum_cls,
+        name=name,
+        native_enum=True,
+        values_callable=lambda cls: [member.value for member in cls],
+    )
+
+
+class Role(StrEnum):
+    """User role. Authority order: CEO > Assistant Director > Junior Director > Editor > Crew > Viewer."""
+
+    CEO = "ceo"
+    ASSISTANT_DIRECTOR = "assistant_director"
+    JUNIOR_DIRECTOR = "junior_director"
+    EDITOR = "editor"
+    CREW = "crew"
+    VIEWER = "viewer"
+
+
+class Category(StrEnum):
+    """Project category. Placeholder list — confirm with CEO in Phase 0 close-out."""
+
+    PROPERTY_TOUR = "property_tour"
+    AGENT_INTRO = "agent_intro"
+    NEIGHBOURHOOD = "neighbourhood"
+    TESTIMONIAL = "testimonial"
+    OTHER = "other"
+
+
+class PipelineStage(StrEnum):
+    """12-stage production pipeline. See project_spec.md §4 for Dutch labels."""
+
+    IDEA = "idea"
+    CATEGORY_SET = "category_set"
+    SCRIPT_DRAFTING = "script_drafting"
+    SCRIPT_REVIEW = "script_review"
+    SCRIPT_LOCKED = "script_locked"
+    LOCATION_SCOUTING = "location_scouting"
+    CASTING = "casting"
+    SHOOT_SCHEDULED = "shoot_scheduled"
+    SHOOT_DONE = "shoot_done"
+    EDITING = "editing"
+    FINAL_REVIEW = "final_review"
+    APPROVED_PUBLISHED = "approved_published"
+
+
+class EditStatus(StrEnum):
+    """Lifecycle of a single edit version (cut)."""
+
+    IN_REVIEW = "in_review"
+    CHANGES_REQUESTED = "changes_requested"
+    APPROVED = "approved"
+
+
+class ShootStatus(StrEnum):
+    """Lifecycle of a single shoot."""
+
+    SCHEDULED = "scheduled"
+    IN_PROGRESS = "in_progress"
+    WRAPPED = "wrapped"
+
+
+__all__ = [
+    "Category",
+    "EditStatus",
+    "PipelineStage",
+    "Role",
+    "ShootStatus",
+    "pg_enum",
+]
