@@ -3,11 +3,8 @@
  *
  * Locale resolution order:
  *   1. The `sre.locale` cookie (set by the user via the locale switcher).
- *   2. `Settings.default_locale` — currently fixed to `nl`.
- *
- * The session-storage JWT carries the locale too (so the user's `Settings`
- * page can reflect it), but for SSR we only read cookies — sessionStorage is
- * unavailable on the server.
+ *   2. Build-mode default: `en` in development, `nl` in production. Dutch is
+ *      the customer-facing language; English is the engineering language.
  */
 
 import { cookies } from "next/headers";
@@ -15,7 +12,8 @@ import { getRequestConfig } from "next-intl/server";
 
 export const SUPPORTED_LOCALES = ["nl", "en"] as const;
 export type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
-export const DEFAULT_LOCALE: SupportedLocale = "nl";
+export const DEFAULT_LOCALE: SupportedLocale =
+  process.env.NODE_ENV === "production" ? "nl" : "en";
 export const LOCALE_COOKIE = "sre.locale";
 
 function isSupported(value: string | undefined): value is SupportedLocale {
