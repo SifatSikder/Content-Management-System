@@ -135,7 +135,7 @@ export function AppShell({ user, children }: { user: AuthUser; children: React.R
         <NavList role={user.role} />
       </aside>
 
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         {/* Top bar */}
         <header className="flex h-14 items-center justify-between border-b px-4 md:px-6">
           <div className="flex items-center gap-2">
