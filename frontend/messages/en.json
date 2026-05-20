@@ -44,6 +44,8 @@
     "sign_in_with_google": "Sign in with Google",
     "or": "or",
     "forgot_password": "Forgot password?",
+    "show_password": "Show password",
+    "hide_password": "Hide password",
     "invalid_credentials": "Incorrect email or password",
     "reset_password_title": "Reset your password",
     "reset_password_subtitle": "Enter your email and we'll send you a reset link.",

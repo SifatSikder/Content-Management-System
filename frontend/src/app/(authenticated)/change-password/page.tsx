@@ -19,7 +19,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { changePassword } from "@/features/auth/api";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { ApiError } from "@/lib/api-client";
@@ -110,7 +110,7 @@ export default function ChangePasswordPage() {
                   <FormItem>
                     <FormLabel>{tAuth("current_password_label")}</FormLabel>
                     <FormControl>
-                      <Input type="password" autoComplete="current-password" {...field} />
+                      <PasswordInput autoComplete="current-password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -123,7 +123,7 @@ export default function ChangePasswordPage() {
                   <FormItem>
                     <FormLabel>{tAuth("new_password_label")}</FormLabel>
                     <FormControl>
-                      <Input type="password" autoComplete="new-password" {...field} />
+                      <PasswordInput autoComplete="new-password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -136,7 +136,7 @@ export default function ChangePasswordPage() {
                   <FormItem>
                     <FormLabel>{tAuth("confirm_password_label")}</FormLabel>
                     <FormControl>
-                      <Input type="password" autoComplete="new-password" {...field} />
+                      <PasswordInput autoComplete="new-password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

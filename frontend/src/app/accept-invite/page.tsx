@@ -19,7 +19,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { acceptInvite } from "@/features/auth/api";
 import { ApiError } from "@/lib/api-client";
 
@@ -115,7 +115,7 @@ export default function AcceptInvitePage() {
                   <FormItem>
                     <FormLabel>{tAuth("new_password_label")}</FormLabel>
                     <FormControl>
-                      <Input type="password" autoComplete="new-password" {...field} />
+                      <PasswordInput autoComplete="new-password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -128,7 +128,7 @@ export default function AcceptInvitePage() {
                   <FormItem>
                     <FormLabel>{tAuth("confirm_password_label")}</FormLabel>
                     <FormControl>
-                      <Input type="password" autoComplete="new-password" {...field} />
+                      <PasswordInput autoComplete="new-password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

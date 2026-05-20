@@ -19,6 +19,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { requestPasswordReset, resetPassword } from "@/features/auth/api";
 import { ApiError } from "@/lib/api-client";
 
@@ -185,7 +186,7 @@ function SetNewPassword({
                   <FormItem>
                     <FormLabel>{tAuth("new_password_label")}</FormLabel>
                     <FormControl>
-                      <Input type="password" autoComplete="new-password" {...field} />
+                      <PasswordInput autoComplete="new-password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -198,7 +199,7 @@ function SetNewPassword({
                   <FormItem>
                     <FormLabel>{tAuth("confirm_password_label")}</FormLabel>
                     <FormControl>
-                      <Input type="password" autoComplete="new-password" {...field} />
+                      <PasswordInput autoComplete="new-password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

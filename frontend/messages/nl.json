@@ -44,6 +44,8 @@
     "sign_in_with_google": "Aanmelden met Google",
     "or": "of",
     "forgot_password": "Wachtwoord vergeten?",
+    "show_password": "Wachtwoord tonen",
+    "hide_password": "Wachtwoord verbergen",
     "invalid_credentials": "Onjuist e-mailadres of wachtwoord",
     "reset_password_title": "Wachtwoord opnieuw instellen",
     "reset_password_subtitle": "Vul je e-mailadres in. We sturen je een link om je wachtwoord opnieuw in te stellen.",
