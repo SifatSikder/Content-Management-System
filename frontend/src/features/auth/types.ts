@@ -7,6 +7,8 @@ export interface AuthUser {
   name: string;
   role: Role;
   must_change_password: boolean;
+  /** Cached Google profile picture URL, or null if the user has never used Google sign-in. */
+  image: string | null;
 }
 
 export interface AcceptInviteBody {

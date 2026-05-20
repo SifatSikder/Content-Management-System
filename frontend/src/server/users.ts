@@ -27,6 +27,7 @@ export interface ActiveUser {
   must_change_password: boolean;
   invited_at: Date | null;
   accepted_at: Date | null;
+  avatar_url: string | null;
 }
 
 export interface UserAdminView extends ActiveUser {
@@ -46,13 +47,14 @@ async function rowToActive(row: Record<string, unknown> | undefined): Promise<Ac
     must_change_password: row.must_change_password as boolean,
     invited_at: (row.invited_at as Date | null) ?? null,
     accepted_at: (row.accepted_at as Date | null) ?? null,
+    avatar_url: (row.avatar_url as string | null) ?? null,
   };
 }
 
 export async function getActiveUserByEmail(email: string): Promise<ActiveUser | null> {
   const result = await getPool().query(
     `SELECT id, email, name, role, locale, password_hash, must_change_password,
-            invited_at, accepted_at
+            invited_at, accepted_at, avatar_url
        FROM users
       WHERE lower(email) = lower($1) AND deleted_at IS NULL
       LIMIT 1`,
@@ -64,7 +66,7 @@ export async function getActiveUserByEmail(email: string): Promise<ActiveUser | 
 export async function getActiveUserById(id: string): Promise<ActiveUser | null> {
   const result = await getPool().query(
     `SELECT id, email, name, role, locale, password_hash, must_change_password,
-            invited_at, accepted_at
+            invited_at, accepted_at, avatar_url
        FROM users
       WHERE id = $1 AND deleted_at IS NULL
       LIMIT 1`,
@@ -75,6 +77,11 @@ export async function getActiveUserById(id: string): Promise<ActiveUser | null> 
 
 export async function touchLastLogin(id: string): Promise<void> {
   await getPool().query(`UPDATE users SET last_login_at = now() WHERE id = $1`, [id]);
+}
+
+/** Update avatar_url. Called from the Google sign-in callback. */
+export async function setAvatarUrl(id: string, url: string | null): Promise<void> {
+  await getPool().query(`UPDATE users SET avatar_url = $1 WHERE id = $2`, [url, id]);
 }
 
 /** Create a pending user (no password, no accepted_at). Returns the new id. */
@@ -129,7 +136,7 @@ export async function softDeleteUser(id: string): Promise<void> {
 export async function listAllUsers(): Promise<UserAdminView[]> {
   const result = await getPool().query(
     `SELECT id, email, name, role, locale, password_hash, must_change_password,
-            invited_at, accepted_at, created_at, last_login_at
+            invited_at, accepted_at, avatar_url, created_at, last_login_at
        FROM users
       WHERE deleted_at IS NULL
       ORDER BY created_at DESC`,
@@ -144,6 +151,7 @@ export async function listAllUsers(): Promise<UserAdminView[]> {
     must_change_password: row.must_change_password,
     invited_at: row.invited_at,
     accepted_at: row.accepted_at,
+    avatar_url: row.avatar_url ?? null,
     created_at: row.created_at,
     last_login_at: row.last_login_at,
   }));

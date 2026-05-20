@@ -25,6 +25,7 @@ class UserPublic(BaseModel):
     name: str
     role: Role
     locale: str
+    avatar_url: str | None = None
 
 
 __all__ = ["UserPublic"]

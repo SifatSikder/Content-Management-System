@@ -32,6 +32,7 @@ export function useAuth(): AuthState & {
           name: data.user.name ?? "",
           role: data.user.role,
           must_change_password: data.user.must_change_password,
+          image: data.user.image ?? null,
         }
       : null;
 

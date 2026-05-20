@@ -25,7 +25,7 @@ import { SignJWT, jwtVerify } from "jose";
 
 import type { Role } from "@/lib/enums";
 import { verifyPassword } from "@/server/password";
-import { getActiveUserByEmail, touchLastLogin } from "@/server/users";
+import { getActiveUserByEmail, setAvatarUrl, touchLastLogin } from "@/server/users";
 
 // 1 hour — matches Settings.jwt_ttl_seconds on the backend.
 const JWT_TTL_SECONDS = 3600;
@@ -89,6 +89,7 @@ function buildProviders(): Provider[] {
           id: user.id,
           email: user.email,
           name: user.name,
+          image: user.avatar_url,
           role: user.role,
           must_change_password: user.must_change_password,
         };
@@ -148,6 +149,8 @@ const config: NextAuthConfig = {
       const payload: Record<string, unknown> = {
         sub: t.sub,
         email: t.email,
+        name: t.name,
+        picture: t.picture,
         role: t.role,
         must_change_password: t.must_change_password,
       };
@@ -171,7 +174,7 @@ const config: NextAuthConfig = {
     // Google sign-in allowlist: only emails that already exist in `users` and
     // have accepted_at IS NOT NULL are allowed in. Prevents random Google
     // accounts from self-signing-up — matches the CEO-controlled invite model.
-    async signIn({ user, account }) {
+    async signIn({ user, account, profile }) {
       if (account?.provider !== "google") return true;
       if (!user.email) return false;
       const known = await getActiveUserByEmail(user.email);
@@ -182,6 +185,13 @@ const config: NextAuthConfig = {
       (user as { role?: Role; must_change_password?: boolean }).must_change_password =
         known.must_change_password;
       (user as { id?: string }).id = known.id;
+      // Cache Google's picture so credentials-only sessions get the same avatar.
+      const picture =
+        (profile as { picture?: string } | null | undefined)?.picture ?? user.image ?? null;
+      if (picture && picture !== known.avatar_url) {
+        await setAvatarUrl(known.id, picture);
+      }
+      (user as { image?: string | null }).image = picture ?? known.avatar_url ?? null;
       await touchLastLogin(known.id);
       return true;
     },
@@ -191,6 +201,7 @@ const config: NextAuthConfig = {
         token.sub = user.id;
         token.email = user.email ?? undefined;
         token.name = user.name ?? undefined;
+        token.picture = user.image ?? undefined;
         (token as Record<string, unknown>).role = user.role;
         (token as Record<string, unknown>).must_change_password =
           user.must_change_password ?? false;
@@ -202,6 +213,8 @@ const config: NextAuthConfig = {
       session.user.id = token.sub!;
       session.user.role = (t.role as Role) ?? "viewer";
       session.user.must_change_password = Boolean(t.must_change_password);
+      session.user.name = (t.name as string | undefined) ?? session.user.name ?? null;
+      session.user.image = (t.picture as string | undefined) ?? session.user.image ?? null;
 
       // Expose the cookie's JWS to client code so apiFetchAuthed can send it
       // as `Authorization: Bearer …` against FastAPI.

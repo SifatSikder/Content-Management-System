@@ -36,6 +36,9 @@ class UserModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     role: Mapped[Role] = mapped_column(pg_enum(Role, name="role"), nullable=False)
     locale: Mapped[str] = mapped_column(String(8), default="nl", nullable=False)
+    # Cached from Google OAuth (`profile.picture`) so credentials-only logins
+    # still get the same avatar. Null when the user has never used Google sign-in.
+    avatar_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
 
     # --- Auth ---
     # Nullable: users invited-but-not-yet-accepted have no hash on file.

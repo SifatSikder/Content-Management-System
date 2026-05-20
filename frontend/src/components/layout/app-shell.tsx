@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 
 import { ThemeToggle } from "@/components/layout/theme-toggle";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -99,6 +99,7 @@ function UserMenu({ user }: { user: AuthUser }) {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" aria-label={tShell("user_menu")}>
           <Avatar className="size-8">
+            {user.image ? <AvatarImage src={user.image} alt={user.name} /> : null}
             <AvatarFallback>{initials(user.name)}</AvatarFallback>
           </Avatar>
         </Button>
