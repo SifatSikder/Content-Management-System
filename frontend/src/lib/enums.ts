@@ -24,7 +24,6 @@ export type Category = (typeof CATEGORIES)[number];
 
 export const PIPELINE_STAGES = [
   "idea",
-  "category_set",
   "script_drafting",
   "script_review",
   "script_locked",

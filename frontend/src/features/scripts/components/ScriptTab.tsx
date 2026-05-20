@@ -110,7 +110,7 @@ export function ScriptTab({ project, role, isOwner, onProjectUpdated }: Props) {
       setCurrentId(created.id);
       window.localStorage.removeItem(AUTOSAVE_KEY(project.id));
       toast.success(tToast("script_saved"));
-      // Stage might have advanced (idea/category_set → script_drafting).
+      // Stage might have advanced (idea → script_drafting).
       const refreshed = await getProject(project.id);
       onProjectUpdated(refreshed);
     } catch {

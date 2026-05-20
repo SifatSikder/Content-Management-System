@@ -109,7 +109,6 @@
   },
   "stages": {
     "idea": "Idee",
-    "category_set": "Categorie",
     "script_drafting": "Script schrijven",
     "script_review": "Script in review",
     "script_locked": "Script vastgelegd",
@@ -130,7 +129,7 @@
     "description_label": "Beschrijving",
     "description_placeholder": "Korte omschrijving van het project",
     "due_date_label": "Deadline",
-    "filter_mine": "Alleen die van mij",
+    "filter_mine": "Door mij aangemaakt",
     "filter_stage": "Fase",
     "empty_kanban": "Nog geen projecten in deze fase.",
     "load_error": "Kon projecten niet laden.",

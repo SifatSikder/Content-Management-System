@@ -53,10 +53,9 @@ class Category(StrEnum):
 
 
 class PipelineStage(StrEnum):
-    """12-stage production pipeline. See project_spec.md §4 for Dutch labels."""
+    """11-stage production pipeline. See project_spec.md §4 for Dutch labels."""
 
     IDEA = "idea"
-    CATEGORY_SET = "category_set"
     SCRIPT_DRAFTING = "script_drafting"
     SCRIPT_REVIEW = "script_review"
     SCRIPT_LOCKED = "script_locked"

@@ -82,8 +82,8 @@ async def add_version(
 
     script.current_version_id = version.id
 
-    # First version moves the project past IDEA/CATEGORY_SET into SCRIPT_DRAFTING.
-    if project.stage in (PipelineStage.IDEA, PipelineStage.CATEGORY_SET):
+    # First version moves the project past IDEA into SCRIPT_DRAFTING.
+    if project.stage == PipelineStage.IDEA:
         previous = project.stage
         project.stage = PipelineStage.SCRIPT_DRAFTING
         await activity_service.record(

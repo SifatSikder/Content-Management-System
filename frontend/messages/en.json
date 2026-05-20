@@ -109,7 +109,6 @@
   },
   "stages": {
     "idea": "Idea",
-    "category_set": "Category",
     "script_drafting": "Script drafting",
     "script_review": "Script review",
     "script_locked": "Script locked",
@@ -130,7 +129,7 @@
     "description_label": "Description",
     "description_placeholder": "Brief description of the project",
     "due_date_label": "Due date",
-    "filter_mine": "Mine only",
+    "filter_mine": "Created by me",
     "filter_stage": "Stage",
     "empty_kanban": "No projects in this stage yet.",
     "load_error": "Could not load projects.",
