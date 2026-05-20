@@ -74,16 +74,19 @@ async def create_project(
     owner_id_override: uuid.UUID | None = None,
 ) -> ProjectModel:
     """Create a project. Activity row + commit are the caller's responsibility."""
-    owner_id = actor.id
+    owner = actor
     if owner_id_override is not None and actor.role in (Role.CEO, Role.ASSISTANT_DIRECTOR):
-        owner_id = owner_id_override
+        override = await session.get(UserModel, owner_id_override)
+        if override is None:
+            raise ProjectNotFoundError(f"owner_id_override {owner_id_override} not found")
+        owner = override
 
     project = ProjectModel(
         title=title,
         description=description,
         category=category,
         stage=PipelineStage.IDEA,
-        owner_id=owner_id,
+        owner=owner,
         due_date=due_date,
     )
     session.add(project)

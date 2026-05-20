@@ -12,10 +12,11 @@ from datetime import date, datetime
 
 from sqlalchemy import Date, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.enums import Category, PipelineStage, pg_enum
+from app.models.user import UserModel
 
 
 class ProjectModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -40,6 +41,7 @@ class ProjectModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         index=True,
     )
+    owner: Mapped[UserModel] = relationship(UserModel, foreign_keys=[owner_id], lazy="selectin")
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Script-lock audit

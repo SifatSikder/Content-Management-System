@@ -5,14 +5,19 @@ import { Calendar } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import type { Project } from "@/features/projects/types";
 import { cn } from "@/lib/utils";
 
-function initials(id: string): string {
-  return id.slice(0, 2).toUpperCase();
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
 }
 
 function formatDate(iso: string): string {
@@ -27,7 +32,6 @@ interface Props {
 
 export function ProjectCard({ project, draggable = true }: Props) {
   const tCat = useTranslations("categories");
-  const tCommon = useTranslations("common");
 
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: project.id,
@@ -65,12 +69,15 @@ export function ProjectCard({ project, draggable = true }: Props) {
             </span>
           )}
         </div>
-        <div className="flex items-center justify-between pt-1">
+        <div className="flex items-center gap-2 pt-1">
           <Avatar className="size-6">
-            <AvatarFallback className="text-[10px]">{initials(project.owner_id)}</AvatarFallback>
+            {project.owner.avatar_url ? (
+              <AvatarImage src={project.owner.avatar_url} alt={project.owner.name} />
+            ) : null}
+            <AvatarFallback className="text-[10px]">{initials(project.owner.name)}</AvatarFallback>
           </Avatar>
-          <span className="text-muted-foreground text-[10px]">
-            {tCommon("updated_at" in (tCommon as unknown as Record<string, string>) ? "updated_at" : "by")}
+          <span className="text-muted-foreground truncate text-[11px]">
+            {project.owner.name}
           </span>
         </div>
       </Link>

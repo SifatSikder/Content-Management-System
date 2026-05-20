@@ -1,5 +1,11 @@
 import type { Category, PipelineStage } from "@/lib/enums";
 
+export interface OwnerPublic {
+  id: string;
+  name: string;
+  avatar_url: string | null;
+}
+
 export interface Project {
   id: string;
   title: string;
@@ -7,6 +13,7 @@ export interface Project {
   category: Category;
   stage: PipelineStage;
   owner_id: string;
+  owner: OwnerPublic;
   due_date: string | null;
   script_locked_at: string | null;
   script_locked_by: string | null;
