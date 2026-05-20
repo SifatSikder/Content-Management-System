@@ -1,6 +1,6 @@
 "use client";
 
-import { Kanban, LayoutDashboard, Menu, Settings } from "lucide-react";
+import { Kanban, LayoutDashboard, Menu, Settings, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -20,20 +20,26 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import type { AuthUser } from "@/features/auth/types";
-import { logout } from "@/features/auth/hooks/useAuth";
+import { useAuth } from "@/features/auth/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
   href: string;
-  labelKey: "kanban" | "dashboard" | "settings";
+  labelKey: "kanban" | "dashboard" | "team" | "settings";
   icon: React.ComponentType<{ className?: string }>;
+  ceoOnly?: boolean;
 }
 
-const NAV_ITEMS: readonly NavItem[] = [
+const ALL_NAV_ITEMS: readonly NavItem[] = [
   { href: "/projects", labelKey: "kanban", icon: Kanban },
   { href: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
+  { href: "/team", labelKey: "team", icon: Users, ceoOnly: true },
   { href: "/settings", labelKey: "settings", icon: Settings },
 ];
+
+function visibleNavItems(role: string): readonly NavItem[] {
+  return ALL_NAV_ITEMS.filter((item) => !item.ceoOnly || role === "ceo");
+}
 
 function initials(name: string): string {
   return name
@@ -44,12 +50,13 @@ function initials(name: string): string {
     .join("");
 }
 
-function NavList({ onNavigate }: { onNavigate?: () => void }) {
+function NavList({ role, onNavigate }: { role: string; onNavigate?: () => void }) {
   const t = useTranslations("shell");
   const pathname = usePathname();
+  const items = visibleNavItems(role);
   return (
     <nav className="flex flex-col gap-1 p-3">
-      {NAV_ITEMS.map((item) => {
+      {items.map((item) => {
         const Icon = item.icon;
         const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
@@ -79,10 +86,10 @@ function UserMenu({ user }: { user: AuthUser }) {
   const tRoles = useTranslations("roles");
   const tToast = useTranslations("toast");
   const router = useRouter();
-  // sonner is a peer import — pull lazily to keep this file lean.
+  const auth = useAuth();
   const handleLogout = async () => {
     const { toast } = await import("sonner");
-    logout();
+    await auth.logout();
     toast.success(tToast("logged_out"));
     router.replace("/");
   };
@@ -125,7 +132,7 @@ export function AppShell({ user, children }: { user: AuthUser; children: React.R
         <div className="flex h-14 items-center border-b px-4">
           <span className="text-sm font-semibold tracking-tight">{tApp("name")}</span>
         </div>
-        <NavList />
+        <NavList role={user.role} />
       </aside>
 
       <div className="flex flex-1 flex-col">
@@ -148,7 +155,7 @@ export function AppShell({ user, children }: { user: AuthUser; children: React.R
                 <div className="flex h-14 items-center border-b px-4">
                   <span className="text-sm font-semibold">{tApp("name")}</span>
                 </div>
-                <NavList onNavigate={() => setSheetOpen(false)} />
+                <NavList role={user.role} onNavigate={() => setSheetOpen(false)} />
               </SheetContent>
             </Sheet>
             <span className="text-sm font-semibold md:hidden">{tApp("name")}</span>
@@ -161,9 +168,9 @@ export function AppShell({ user, children }: { user: AuthUser; children: React.R
 
         <main className="flex-1">{children}</main>
 
-        {/* Mobile bottom nav */}
-        <nav className="bg-background sticky bottom-0 grid grid-cols-3 border-t md:hidden">
-          {NAV_ITEMS.map((item) => {
+        {/* Mobile bottom nav — limit to 4 items max for thumb reach */}
+        <nav className="bg-background sticky bottom-0 grid auto-cols-fr grid-flow-col border-t md:hidden">
+          {visibleNavItems(user.role).map((item) => {
             const Icon = item.icon;
             return (
               <Link

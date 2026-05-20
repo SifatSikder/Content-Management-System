@@ -43,9 +43,19 @@ class Settings(BaseSettings):
     redis_url: str = "redis://:cms_redis@localhost:6379/0"
 
     # --- Auth / JWT --------------------------------------------------------
+    # IMPORTANT: NextAuth (frontend/auth.ts) signs its session JWT with this
+    # same secret using HS256. Cookie JWT == valid bearer token for FastAPI.
     jwt_secret: str = "changeme-local-dev-only"
-    jwt_ttl_seconds: int = 3600  # 1 hour
-    magic_link_ttl_seconds: int = 900  # 15 minutes
+    jwt_ttl_seconds: int = 3600  # 1 hour — matches NextAuth session maxAge.
+
+    # --- One-time tokens (invitations + password resets) -------------------
+    invitation_ttl_seconds: int = 7 * 24 * 3600  # 7 days
+    password_reset_ttl_seconds: int = 3600  # 1 hour
+
+    # --- CEO bootstrap (read by scripts/seed_demo.py) ----------------------
+    ceo_email: str = "ceo@example.com"
+    ceo_name: str = "Demo CEO"
+    ceo_initial_password: str | None = None  # required at seed time
 
     # --- Storage (GCS) -----------------------------------------------------
     # In dev, point the google-cloud-storage SDK at fake-gcs-server.
@@ -54,9 +64,12 @@ class Settings(BaseSettings):
     gcs_bucket_backups: str = "sre-backups-dev"
     google_application_credentials: str | None = None
 
-    # --- Email (Resend) — dev mocks, real in Phase 5 -----------------------
-    resend_api_key: str | None = None
-    resend_from_email: str = "noreply@sonsrealestate.local"
+    # --- Gmail send (used by Phase-3 backend notifications; Next.js layer
+    # owns invite + reset email sending in Phase 1) -------------------------
+    gmail_oauth_client_id: str | None = None
+    gmail_oauth_client_secret: str | None = None
+    gmail_oauth_refresh_token: str | None = None
+    gmail_sender_address: str | None = None
 
     # --- WhatsApp (Cloud API) — dev mocks, real in Phase 5 -----------------
     whatsapp_token: str | None = None

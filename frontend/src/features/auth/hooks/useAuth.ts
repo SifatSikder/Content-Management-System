@@ -1,64 +1,45 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { signOut as nextAuthSignOut, useSession } from "next-auth/react";
 
-import { ApiError, getAccessToken, setAccessToken } from "@/lib/api-client";
+import type { AuthUser } from "@/features/auth/types";
 
-import { fetchMe } from "../api";
-import type { AuthUser } from "../types";
-
-interface AuthState {
+export interface AuthState {
   status: "loading" | "authenticated" | "anonymous";
   user: AuthUser | null;
 }
 
-const _listeners = new Set<() => void>();
-
-function notifyAuthChange() {
-  _listeners.forEach((fn) => fn());
-}
-
-export function logout(): void {
-  setAccessToken(null);
-  notifyAuthChange();
-}
-
-export function loginWithToken(token: string): void {
-  setAccessToken(token);
-  notifyAuthChange();
-}
-
+/**
+ * Read-only auth state derived from the NextAuth session.
+ *
+ * Login/logout no longer go through this hook — login is via the Credentials
+ * form posting to `/api/auth/callback/credentials` (handled by `signIn()` in
+ * `next-auth/react`), and logout calls `signOut()` directly.
+ */
 export function useAuth(): AuthState & {
-  refresh: () => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 } {
-  const [state, setState] = useState<AuthState>({ status: "loading", user: null });
+  const { data, status } = useSession();
 
-  const refresh = useCallback(async () => {
-    const token = getAccessToken();
-    if (!token) {
-      setState({ status: "anonymous", user: null });
-      return;
-    }
-    try {
-      const me = await fetchMe();
-      setState({ status: "authenticated", user: me });
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        setAccessToken(null);
-      }
-      setState({ status: "anonymous", user: null });
-    }
-  }, []);
+  const authStatus: AuthState["status"] =
+    status === "loading" ? "loading" : status === "authenticated" ? "authenticated" : "anonymous";
 
-  useEffect(() => {
-    void refresh();
-    const onChange = () => void refresh();
-    _listeners.add(onChange);
-    return () => {
-      _listeners.delete(onChange);
-    };
-  }, [refresh]);
+  const user: AuthUser | null =
+    data?.user && data.user.id
+      ? {
+          id: data.user.id,
+          email: data.user.email ?? "",
+          name: data.user.name ?? "",
+          role: data.user.role,
+          must_change_password: data.user.must_change_password,
+        }
+      : null;
 
-  return { ...state, refresh, logout };
+  return {
+    status: authStatus,
+    user,
+    async logout() {
+      await nextAuthSignOut({ redirect: false });
+    },
+  };
 }

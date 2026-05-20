@@ -9,10 +9,17 @@ from app.models.activity import ActivityModel
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.cast_member import CastMemberModel
 from app.models.edit import EditCommentModel, EditVersionModel
-from app.models.enums import Category, EditStatus, PipelineStage, Role, ShootStatus
+from app.models.enums import (
+    Category,
+    EditStatus,
+    PipelineStage,
+    Role,
+    ShootStatus,
+    TokenPurpose,
+)
 from app.models.location import LocationModel
-from app.models.magic_link import MagicLinkModel
 from app.models.notification import NotificationModel, PushSubscriptionModel
+from app.models.one_time_token import OneTimeTokenModel
 from app.models.project import ProjectModel
 from app.models.script import ScriptCommentModel, ScriptModel, ScriptVersionModel
 from app.models.shoot import ShootModel
@@ -27,8 +34,8 @@ __all__ = [
     "EditStatus",
     "EditVersionModel",
     "LocationModel",
-    "MagicLinkModel",
     "NotificationModel",
+    "OneTimeTokenModel",
     "PipelineStage",
     "ProjectModel",
     "PushSubscriptionModel",
@@ -39,6 +46,7 @@ __all__ = [
     "ShootModel",
     "ShootStatus",
     "TimestampMixin",
+    "TokenPurpose",
     "UUIDPrimaryKeyMixin",
     "UserModel",
 ]

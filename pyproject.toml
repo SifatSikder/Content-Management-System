@@ -21,6 +21,7 @@ dependencies = [
     "arq>=0.26.0",
     "redis>=5.2.0",
     "email-validator>=2.2.0",
+    "google-auth-oauthlib>=1.4.0",
 ]
 
 [dependency-groups]
@@ -62,7 +63,15 @@ plugins = ["pydantic.mypy"]
 exclude = ["alembic/versions/"]
 
 [[tool.mypy.overrides]]
-module = ["jose.*", "passlib.*", "google.cloud.*", "arq.*", "pywebpush.*", "slowapi.*"]
+module = [
+    "jose.*",
+    "passlib.*",
+    "google.*",
+    "googleapiclient.*",
+    "arq.*",
+    "pywebpush.*",
+    "slowapi.*",
+]
 ignore_missing_imports = true
 
 [tool.codespell]

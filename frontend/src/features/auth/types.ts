@@ -1,19 +1,30 @@
 import type { Role } from "@/lib/enums";
 
+/** Public projection of a user — matches `app/schemas/auth.py` UserPublic. */
 export interface AuthUser {
   id: string;
   email: string;
   name: string;
   role: Role;
-  locale: string;
+  must_change_password: boolean;
 }
 
-export interface VerifyResponse {
-  access_token: string;
-  user: AuthUser;
+export interface AcceptInviteBody {
+  token: string;
+  password: string;
+  name?: string;
 }
 
-export interface RequestLinkBody {
+export interface RequestResetBody {
   email: string;
-  locale?: string;
+}
+
+export interface ResetPasswordBody {
+  token: string;
+  password: string;
+}
+
+export interface ChangePasswordBody {
+  current_password: string;
+  new_password: string;
 }

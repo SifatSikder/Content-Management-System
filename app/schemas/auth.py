@@ -1,23 +1,18 @@
-"""Pydantic DTOs for the auth endpoints."""
+"""Pydantic DTOs for the auth endpoints.
+
+Auth (login, set/change/reset password, accept invite) is owned by NextAuth
+on the Next.js layer. This module only declares the public projection of a
+user — used by `GET /auth/me` and exported to TypeScript via the OpenAPI
+artifact.
+"""
 
 from __future__ import annotations
 
 import uuid
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict
 
 from app.models.enums import Role
-
-
-class RequestLinkBody(BaseModel):
-    email: EmailStr
-    locale: str | None = Field(default=None, max_length=8)
-
-
-class RequestLinkResponse(BaseModel):
-    """Anti-enumeration ack — identical for known and unknown emails."""
-
-    status: str = "ok"
 
 
 class UserPublic(BaseModel):
@@ -32,9 +27,4 @@ class UserPublic(BaseModel):
     locale: str
 
 
-class VerifyResponse(BaseModel):
-    access_token: str
-    user: UserPublic
-
-
-__all__ = ["RequestLinkBody", "RequestLinkResponse", "UserPublic", "VerifyResponse"]
+__all__ = ["UserPublic"]

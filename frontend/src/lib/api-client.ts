@@ -1,9 +1,15 @@
 /**
  * The SINGLE HTTP client for the whole frontend.
  *
- * Per the project blueprint, NO other file may call `fetch` directly.
- * Features import `apiFetch` (unauthenticated) or `apiFetchAuthed` (reads JWT
- * from sessionStorage and injects `Authorization: Bearer …`) from here.
+ * Per the project blueprint, NO other file may call `fetch` directly. Features
+ * import `apiFetch` (unauthenticated) or `apiFetchAuthed` (reads the JWT from
+ * the NextAuth session and injects `Authorization: Bearer …`) from here.
+ *
+ * After the NextAuth pivot the JWT source is the session cookie via
+ * `getSession()` (client) or `auth()` (server components). The cookie itself
+ * is a JWS HS256 token signed with the same JWT_SECRET as the FastAPI backend,
+ * so passing it as a bearer token works without a separate exchange. See
+ * `frontend/src/auth.ts` for the encode/decode override.
  *
  * Responsibilities:
  *   - Resolve the base URL from `NEXT_PUBLIC_API_URL`.
@@ -12,13 +18,9 @@
  *   - Deserialize typed JSON responses; handle 204 / empty bodies safely.
  *   - Throw a typed `ApiError(status, message, detail)` on non-2xx, parsing
  *     FastAPI's `{ detail: … }` body when present.
- *
- * It knows nothing about React, routing, feature state, or business logic.
- * All cross-cutting transport concerns (retry, tracing, refresh) belong here.
  */
 
 const DEFAULT_BASE_URL = "http://localhost:8000";
-const TOKEN_STORAGE_KEY = "sre.access_token";
 
 /** Thrown for any non-2xx response. */
 export class ApiError extends Error {
@@ -93,27 +95,26 @@ async function parseSuccess<T>(response: Response): Promise<T> {
   return JSON.parse(text) as T;
 }
 
-/** Read the JWT from sessionStorage. SSR-safe — returns null on the server. */
-export function getAccessToken(): string | null {
+/**
+ * Resolve the bearer JWT from the NextAuth session — **client-side only**.
+ *
+ * `next-auth/react`'s `getSession()` fetches the session via an internal
+ * /api/auth/session call. We deliberately don't import `@/auth` here because
+ * that module transitively pulls in `next/headers`, which breaks the client
+ * bundle.
+ *
+ * In Phase 1 every consumer of `apiFetchAuthed` is a client component. Server
+ * components / route handlers that need to call FastAPI should call `auth()`
+ * themselves and pass `session.accessToken` explicitly.
+ */
+async function getAccessToken(): Promise<string | null> {
   if (typeof window === "undefined") return null;
   try {
-    return window.sessionStorage.getItem(TOKEN_STORAGE_KEY);
+    const { getSession } = await import("next-auth/react");
+    const session = await getSession();
+    return (session as { accessToken?: string } | null)?.accessToken ?? null;
   } catch {
     return null;
-  }
-}
-
-/** Persist the JWT to sessionStorage. SSR-safe — no-op on the server. */
-export function setAccessToken(token: string | null): void {
-  if (typeof window === "undefined") return;
-  try {
-    if (token) {
-      window.sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
-    } else {
-      window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
-    }
-  } catch {
-    // best-effort
   }
 }
 
@@ -154,17 +155,38 @@ async function request<T>(
 }
 
 /** Unauthenticated request — no Authorization header is added. */
-export function apiFetch<T = unknown>(
-  path: string,
-  init?: RequestInit,
-): Promise<T> {
+export function apiFetch<T = unknown>(path: string, init?: RequestInit): Promise<T> {
   return request<T>(path, init, null);
 }
 
-/** Authenticated request — JWT read from sessionStorage and sent as Bearer. */
-export function apiFetchAuthed<T = unknown>(
+/**
+ * Same-origin call to a Next.js route handler (e.g. `/api/auth/*`). Skips the
+ * FastAPI base URL prefix and relies on the NextAuth session cookie travelling
+ * via `credentials: "include"` rather than a bearer header.
+ */
+export async function localFetch<T = unknown>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  let body = init?.body;
+  if (shouldSerializeJson(body)) {
+    body = JSON.stringify(body);
+    if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  }
+  if (!headers.has("Accept")) headers.set("Accept", "application/json");
+  const response = await fetch(path, {
+    ...init,
+    body,
+    headers,
+    credentials: "include",
+  });
+  if (!response.ok) throw await parseError(response);
+  return parseSuccess<T>(response);
+}
+
+/** Authenticated request — JWT pulled from the NextAuth session, sent as Bearer. */
+export async function apiFetchAuthed<T = unknown>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  return request<T>(path, init, getAccessToken());
+  const token = await getAccessToken();
+  return request<T>(path, init, token);
 }

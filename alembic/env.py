@@ -21,8 +21,8 @@ from app.models import activity as _activity  # noqa: F401
 from app.models import cast_member as _cast_member  # noqa: F401
 from app.models import edit as _edit  # noqa: F401
 from app.models import location as _location  # noqa: F401
-from app.models import magic_link as _magic_link  # noqa: F401
 from app.models import notification as _notification  # noqa: F401
+from app.models import one_time_token as _one_time_token  # noqa: F401
 from app.models import project as _project  # noqa: F401
 from app.models import script as _script  # noqa: F401
 from app.models import shoot as _shoot  # noqa: F401

@@ -25,9 +25,6 @@ export default function SettingsPage() {
           <div>
             <span className="text-muted-foreground">Role:</span> {tRoles(auth.user.role)}
           </div>
-          <div>
-            <span className="text-muted-foreground">Locale:</span> {auth.user.locale}
-          </div>
         </CardContent>
       </Card>
     </div>

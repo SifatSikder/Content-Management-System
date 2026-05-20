@@ -1,8 +1,10 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { signIn } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -21,12 +23,11 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { requestLink } from "@/features/auth/api";
 import { useAuth } from "@/features/auth/hooks/useAuth";
-import { ApiError } from "@/lib/api-client";
 
 const schema = z.object({
   email: z.string().email(),
+  password: z.string().min(1),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -34,35 +35,39 @@ type FormValues = z.infer<typeof schema>;
 export default function HomePage() {
   const tApp = useTranslations("app");
   const tAuth = useTranslations("auth");
-  const tToast = useTranslations("toast");
   const tErr = useTranslations("errors");
   const router = useRouter();
   const auth = useAuth();
-  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  // Already signed in? Send them straight to the kanban.
+  // Already signed in? Hop straight to the right destination.
   useEffect(() => {
-    if (auth.status === "authenticated") {
-      router.replace("/projects");
-    }
-  }, [auth.status, router]);
+    if (auth.status !== "authenticated" || !auth.user) return;
+    router.replace(auth.user.must_change_password ? "/change-password" : "/projects");
+  }, [auth.status, auth.user, router]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { email: "" },
+    defaultValues: { email: "", password: "" },
   });
 
   async function onSubmit(values: FormValues) {
+    setSubmitting(true);
     try {
-      await requestLink({ email: values.email });
-      setSubmitted(true);
-      toast.success(tToast("magic_link_sent"));
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 429) {
-        toast.error(tErr("rate_limited"));
-      } else {
-        toast.error(tErr("generic"));
+      const result = await signIn("credentials", {
+        email: values.email,
+        password: values.password,
+        redirect: false,
+      });
+      if (!result || result.error) {
+        toast.error(tAuth("invalid_credentials"));
+        return;
       }
+      // useAuth's useEffect picks up the new session + redirects.
+    } catch {
+      toast.error(tErr("generic"));
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -79,50 +84,76 @@ export default function HomePage() {
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-6 py-16">
         <Card>
           <CardHeader>
-            <CardTitle>{submitted ? tAuth("check_inbox_title") : tAuth("title")}</CardTitle>
-            <CardDescription>
-              {submitted ? tAuth("check_inbox_body") : tAuth("subtitle")}
-            </CardDescription>
+            <CardTitle>{tAuth("title")}</CardTitle>
+            <CardDescription>{tAuth("subtitle_password")}</CardDescription>
           </CardHeader>
           <CardContent>
-            {submitted ? (
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => setSubmitted(false)}
-              >
-                {tAuth("send_again")}
-              </Button>
-            ) : (
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{tAuth("email_label")}</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="email"
-                            autoComplete="email"
-                            placeholder={tAuth("email_placeholder")}
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={form.formState.isSubmitting}
-                  >
-                    {tAuth("request_link")}
-                  </Button>
-                </form>
-              </Form>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{tAuth("email_label")}</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="email"
+                          autoComplete="email"
+                          placeholder={tAuth("email_placeholder")}
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center justify-between">
+                        <FormLabel>{tAuth("password_label")}</FormLabel>
+                        <Link
+                          href="/reset-password"
+                          className="text-muted-foreground hover:text-foreground text-xs"
+                        >
+                          {tAuth("forgot_password")}
+                        </Link>
+                      </div>
+                      <FormControl>
+                        <Input type="password" autoComplete="current-password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button type="submit" className="w-full" disabled={submitting}>
+                  {submitting ? tAuth("signing_in") : tAuth("sign_in")}
+                </Button>
+              </form>
+            </Form>
+
+            {process.env.NEXT_PUBLIC_GOOGLE_SIGN_IN_ENABLED === "true" && (
+              <>
+                <div className="my-6 flex items-center gap-3">
+                  <div className="bg-border h-px flex-1" />
+                  <span className="text-muted-foreground text-xs uppercase tracking-wider">
+                    {tAuth("or")}
+                  </span>
+                  <div className="bg-border h-px flex-1" />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => signIn("google", { callbackUrl: "/projects" })}
+                  disabled={submitting}
+                >
+                  {tAuth("sign_in_with_google")}
+                </Button>
+              </>
             )}
           </CardContent>
         </Card>

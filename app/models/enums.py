@@ -85,11 +85,19 @@ class ShootStatus(StrEnum):
     WRAPPED = "wrapped"
 
 
+class TokenPurpose(StrEnum):
+    """What a one-time token is for. Drives both TTL and email template choice."""
+
+    INVITATION = "invitation"
+    PASSWORD_RESET = "password_reset"
+
+
 __all__ = [
     "Category",
     "EditStatus",
     "PipelineStage",
     "Role",
     "ShootStatus",
+    "TokenPurpose",
     "pg_enum",
 ]
