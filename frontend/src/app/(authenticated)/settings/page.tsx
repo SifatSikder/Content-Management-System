@@ -4,6 +4,8 @@ import { useTranslations } from "next-intl";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/features/auth/hooks/useAuth";
+import { DriveSettings } from "@/features/drive/components/DriveSettings";
+import { NotificationPrefsCard } from "@/features/notification-prefs/components/NotificationPrefsCard";
 import { PushSettings } from "@/features/push/components/PushSettings";
 
 export default function SettingsPage() {
@@ -30,6 +32,8 @@ export default function SettingsPage() {
       </Card>
 
       <PushSettings />
+      <NotificationPrefsCard />
+      <DriveSettings />
     </div>
   );
 }

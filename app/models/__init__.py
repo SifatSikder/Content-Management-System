@@ -8,6 +8,7 @@ to this list or autogenerate will miss it.
 from app.models.activity import ActivityModel
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.cast_member import CastMemberModel
+from app.models.connected_google_account import ConnectedGoogleAccountModel
 from app.models.edit import EditCommentModel, EditVersionModel
 from app.models.enums import (
     Category,
@@ -20,6 +21,7 @@ from app.models.enums import (
 from app.models.location import LocationModel
 from app.models.location_photo import LocationPhotoModel
 from app.models.notification import NotificationModel, PushSubscriptionModel
+from app.models.notification_prefs import UserNotificationPrefsModel
 from app.models.one_time_token import OneTimeTokenModel
 from app.models.project import ProjectModel
 from app.models.script import ScriptCommentModel, ScriptModel, ScriptVersionModel
@@ -31,6 +33,7 @@ __all__ = [
     "Base",
     "CastMemberModel",
     "Category",
+    "ConnectedGoogleAccountModel",
     "EditCommentModel",
     "EditStatus",
     "EditVersionModel",
@@ -51,4 +54,5 @@ __all__ = [
     "TokenPurpose",
     "UUIDPrimaryKeyMixin",
     "UserModel",
+    "UserNotificationPrefsModel",
 ]

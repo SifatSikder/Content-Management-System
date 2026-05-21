@@ -2,21 +2,32 @@
 
 import { useTranslations } from "next-intl";
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AwaitingTile } from "@/features/dashboard/components/AwaitingTile";
+import { StageHistogram } from "@/features/dashboard/components/StageHistogram";
+import { StuckList } from "@/features/dashboard/components/StuckList";
+import { ThroughputChart } from "@/features/dashboard/components/ThroughputChart";
+import { TimeInStageTable } from "@/features/dashboard/components/TimeInStageTable";
 
 export default function DashboardPage() {
-  const t = useTranslations("shell");
+  const t = useTranslations("dashboard");
   return (
-    <div className="p-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("dashboard")}</CardTitle>
-          <CardDescription>Phase 3 wires this surface end-to-end.</CardDescription>
-        </CardHeader>
-        <CardContent className="text-muted-foreground text-sm">
-          Stage histogram, awaiting-approval queue, throughput chart land in Task 3.4.
-        </CardContent>
-      </Card>
+    <div className="space-y-6 p-6">
+      <div>
+        <h1 className="text-2xl font-semibold">{t("page_title")}</h1>
+        <p className="text-muted-foreground text-sm">{t("page_subtitle")}</p>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <AwaitingTile />
+        <StuckList days={5} />
+      </div>
+
+      <StageHistogram />
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <ThroughputChart weeks={12} />
+        <TimeInStageTable />
+      </div>
     </div>
   );
 }

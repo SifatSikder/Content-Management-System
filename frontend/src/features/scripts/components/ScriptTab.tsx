@@ -15,6 +15,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { ImportGdocDialog } from "@/features/scripts/components/ImportGdocDialog";
 import { ScriptComments } from "@/features/scripts/components/ScriptComments";
 import { ScriptEditor } from "@/features/scripts/components/ScriptEditor";
 import {
@@ -205,6 +206,19 @@ export function ScriptTab({ project, role, isOwner, onProjectUpdated }: Props) {
                 </ul>
               </SheetContent>
             </Sheet>
+            {canEdit && (
+              <ImportGdocDialog
+                projectId={project.id}
+                onImported={async (version) => {
+                  setVersions((prev) => [...prev, version]);
+                  setCurrentId(version.id);
+                  setDraft(version.body_markdown ?? "");
+                  // Stage may have advanced (idea → script_drafting).
+                  const refreshed = await getProject(project.id);
+                  onProjectUpdated(refreshed);
+                }}
+              />
+            )}
             {canEdit && (
               <Button size="sm" onClick={saveAsNewVersion} disabled={saving || !draft.trim()}>
                 <Save className="mr-2 size-4" />

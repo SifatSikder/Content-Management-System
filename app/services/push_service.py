@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.models.notification import PushSubscriptionModel
-from app.services import queue_service
+from app.services import notification_prefs_service, queue_service
 
 log = structlog.get_logger(__name__)
 
@@ -107,12 +107,28 @@ async def list_subscriptions_for_user(
 
 
 async def notify_user(
-    session: AsyncSession, *, user_id: uuid.UUID, payload: dict[str, Any]
+    session: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    payload: dict[str, Any],
+    event_key: str | None = None,
 ) -> int:
     """Enqueue a push job per active subscription. Returns the count
     enqueued. Best-effort — Redis failures don't raise here (handled by
     queue_service.enqueue).
+
+    When `event_key` is provided, the user's notification preferences gate
+    delivery — a muted event returns 0 without touching Redis. Callers that
+    don't pass `event_key` (e.g. ad-hoc test pings) bypass the gate.
     """
+    if event_key is not None:
+        enabled = await notification_prefs_service.is_event_enabled(
+            session, user_id=user_id, event_key=event_key
+        )
+        if not enabled:
+            log.info("push_skipped_muted", user_id=str(user_id), event_key=event_key)
+            return 0
+
     subs = await list_subscriptions_for_user(session, user_id=user_id)
     enqueued = 0
     for sub in subs:

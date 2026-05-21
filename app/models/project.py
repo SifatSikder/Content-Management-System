@@ -58,5 +58,12 @@ class ProjectModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         DateTime(timezone=True), nullable=True, index=True
     )
 
+    # --- Google Drive (Phase 3 Task 3.3) -----------------------------------
+    # Drive folder ID + display URL attached to the project. Access uses the
+    # *caller's* connected Drive token (per-user OAuth), not a shared service
+    # account, so revoking a team member's Drive doesn't break the project.
+    drive_folder_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    drive_folder_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+
 
 __all__ = ["ProjectModel"]

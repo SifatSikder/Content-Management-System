@@ -20,9 +20,12 @@ from app.models.base import dispose_engine, get_sessionmaker
 from app.routes import (
     auth,
     casting,
+    dashboard,
+    drive,
     edits,
     health,
     locations,
+    notification_prefs,
     projects,
     push,
     scripts,
@@ -113,6 +116,10 @@ def create_app() -> FastAPI:
     app.include_router(shoots.projects_router)
     app.include_router(shoots.shoots_router)
     app.include_router(push.router)
+    app.include_router(drive.auth_router)
+    app.include_router(drive.projects_router)
+    app.include_router(dashboard.router)
+    app.include_router(notification_prefs.router)
 
     return app
 

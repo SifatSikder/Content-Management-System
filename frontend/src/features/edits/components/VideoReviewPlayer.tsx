@@ -54,7 +54,10 @@ export const VideoReviewPlayer = forwardRef<VideoReviewPlayerHandle, Props>(
         const v = videoRef.current;
         if (!v) return;
         v.currentTime = seconds;
-        void v.play();
+        // play() rejects with NotSupportedError when the source can't be
+        // decoded (common against fake-gcs-server placeholder bytes in dev).
+        // Swallow — the <video onError> handler surfaces a UI-visible error.
+        v.play().catch(() => {});
       },
     }));
 
@@ -107,6 +110,7 @@ export const VideoReviewPlayer = forwardRef<VideoReviewPlayerHandle, Props>(
             onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
+            onError={() => setPlaying(false)}
             playsInline
             controls={false}
           />
@@ -120,7 +124,7 @@ export const VideoReviewPlayer = forwardRef<VideoReviewPlayerHandle, Props>(
             onClick={() => {
               const v = videoRef.current;
               if (!v) return;
-              if (v.paused) void v.play();
+              if (v.paused) v.play().catch(() => {});
               else v.pause();
             }}
           >

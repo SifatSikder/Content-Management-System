@@ -72,6 +72,19 @@ class Settings(BaseSettings):
     gmail_oauth_refresh_token: str | None = None
     gmail_sender_address: str | None = None
 
+    # --- Google Drive OAuth (per-user; Phase 3 Task 3.3) -------------------
+    # Separate OAuth client from sign-in. Scope: drive.readonly. Refresh
+    # tokens are encrypted with TOKEN_ENCRYPTION_KEY (Fernet) before persist.
+    google_drive_client_id: str | None = None
+    google_drive_client_secret: str | None = None
+    google_drive_redirect_uri: str = "http://localhost:8000/auth/google/drive/callback"
+    google_drive_post_auth_redirect: str = "http://localhost:3000/settings"
+
+    # --- Token encryption (Phase 3) ----------------------------------------
+    # Fernet key (urlsafe-base64-encoded 32 bytes). Generate with
+    # `uv run python scripts/gen_token_encryption_key.py`.
+    token_encryption_key: str | None = None
+
     # --- Web Push (VAPID) --------------------------------------------------
     # Generate with `uv run python scripts/gen_vapid_keys.py`. Private key
     # is the PEM of an EC P-256 keypair; public key is the matching PEM.
