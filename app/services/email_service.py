@@ -3,8 +3,8 @@
 The Phase-1 auth flow (invitations, password resets, password-changed
 notices) is fronted by the Next.js layer and sends via `googleapis` in
 `frontend/src/server/email.ts`. This module is the **backend** counterpart,
-exposed for Phase 3 (WhatsApp + notification fanouts) where worker jobs
-running outside a Next.js request need to send mail too.
+exposed for Phase 3 notification fanouts where worker jobs running outside
+a Next.js request need to send mail too.
 
 Both layers share the same `GMAIL_OAUTH_*` env vars and the same sender
 mailbox. Refresh tokens are durable; access tokens are minted on demand by

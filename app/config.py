@@ -72,11 +72,6 @@ class Settings(BaseSettings):
     gmail_oauth_refresh_token: str | None = None
     gmail_sender_address: str | None = None
 
-    # --- WhatsApp (Cloud API) — dev mocks, real in Phase 5 -----------------
-    whatsapp_token: str | None = None
-    whatsapp_phone_number_id: str | None = None
-    whatsapp_group_id: str | None = None
-
     # --- Web Push (VAPID) --------------------------------------------------
     # Generate with `uv run python scripts/gen_vapid_keys.py`. Private key
     # is the PEM of an EC P-256 keypair; public key is the matching PEM.
