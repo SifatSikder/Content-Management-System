@@ -9,7 +9,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, computed_field
+from pydantic import Field, computed_field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 AppEnv = Literal["dev", "prod"]
@@ -85,6 +85,26 @@ class Settings(BaseSettings):
     vapid_private_pem: str | None = None
     vapid_public_pem: str | None = None
     vapid_subject: str | None = None  # e.g. "mailto:ceo@example.com"
+
+    @field_validator("vapid_private_pem", "vapid_public_pem", mode="before")
+    @classmethod
+    def _decode_pem(cls, value: object) -> object:
+        """Tolerate `\\n`-escaped + quoted PEMs that come via the Makefile.
+
+        `Makefile` does `include .env.local; export`, which passes our PEM
+        values into the subprocess environment with literal quotes and
+        `\\n` escapes (Make doesn't interpret either). pydantic-settings
+        reads os.environ first, so we'd see the broken form. Normalise
+        here: strip optional wrapping quotes and decode `\\n` → newline.
+        """
+        if not isinstance(value, str):
+            return value
+        v = value.strip()
+        if (v.startswith('"') and v.endswith('"')) or (
+            v.startswith("'") and v.endswith("'")
+        ):
+            v = v[1:-1]
+        return v.replace("\\n", "\n")
 
     # --- Computed flags ----------------------------------------------------
     @computed_field  # type: ignore[prop-decorator]
