@@ -16,7 +16,25 @@ export type ActivityAction =
   | "edit.changes_requested"
   | "edit.comment_added"
   | "edit.comment_resolved"
-  | "edit.comment_reopened";
+  | "edit.comment_reopened"
+  | "location.created"
+  | "location.updated"
+  | "location.confirmed"
+  | "location.unconfirmed"
+  | "location.deleted"
+  | "location.photo_added"
+  | "location.photo_deleted"
+  | "cast.created"
+  | "cast.updated"
+  | "cast.confirmed"
+  | "cast.unconfirmed"
+  | "cast.release_uploaded"
+  | "cast.deleted"
+  | "shoot.created"
+  | "shoot.updated"
+  | "shoot.call_sheet_uploaded"
+  | "shoot.transitioned"
+  | "shoot.deleted";
 
 export interface ActivityItem {
   id: string;

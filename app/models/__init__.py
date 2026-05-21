@@ -18,6 +18,7 @@ from app.models.enums import (
     TokenPurpose,
 )
 from app.models.location import LocationModel
+from app.models.location_photo import LocationPhotoModel
 from app.models.notification import NotificationModel, PushSubscriptionModel
 from app.models.one_time_token import OneTimeTokenModel
 from app.models.project import ProjectModel
@@ -34,6 +35,7 @@ __all__ = [
     "EditStatus",
     "EditVersionModel",
     "LocationModel",
+    "LocationPhotoModel",
     "NotificationModel",
     "OneTimeTokenModel",
     "PipelineStage",

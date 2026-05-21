@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/features/auth/hooks/useAuth";
+import { PushSettings } from "@/features/push/components/PushSettings";
 
 export default function SettingsPage() {
   const t = useTranslations("shell");
@@ -27,6 +28,8 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <PushSettings />
     </div>
   );
 }

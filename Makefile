@@ -46,14 +46,14 @@ dev: ## run FastAPI with --reload
 	uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 .PHONY: dev-worker
-dev-worker: ## run arq worker (Phase 2+)
-	@echo "arq worker is stubbed until Phase 2 (Task 2.2)."
+dev-worker: ## run arq worker
+	uv run arq app.jobs.worker.WorkerSettings
 
 # --- Frontend dev -----------------------------------------------------------
 
 .PHONY: dev-web
-dev-web: ## run Next.js dev server
-	cd frontend && pnpm dev
+dev-web: ## run Next.js dev server on :3001 (OAuth redirect URIs are pinned to this port)
+	cd frontend && pnpm dev --port 3001
 
 .PHONY: build-web
 build-web: ## production build of the frontend

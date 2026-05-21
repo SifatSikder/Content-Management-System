@@ -17,7 +17,17 @@ from app.core.logging import configure_logging
 from app.core.middleware import RequestIDMiddleware
 from app.core.rate_limit import limiter, rate_limit_handler
 from app.models.base import dispose_engine, get_sessionmaker
-from app.routes import auth, edits, health, projects, scripts
+from app.routes import (
+    auth,
+    casting,
+    edits,
+    health,
+    locations,
+    projects,
+    push,
+    scripts,
+    shoots,
+)
 
 log = structlog.get_logger(__name__)
 
@@ -96,6 +106,13 @@ def create_app() -> FastAPI:
     app.include_router(scripts.scripts_router)
     app.include_router(edits.projects_router)
     app.include_router(edits.edits_router)
+    app.include_router(locations.projects_router)
+    app.include_router(locations.locations_router)
+    app.include_router(casting.projects_router)
+    app.include_router(casting.cast_router)
+    app.include_router(shoots.projects_router)
+    app.include_router(shoots.shoots_router)
+    app.include_router(push.router)
 
     return app
 

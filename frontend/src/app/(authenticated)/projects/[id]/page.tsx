@@ -9,11 +9,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ActivityFeed } from "@/features/activity/components/ActivityFeed";
 import { useAuth } from "@/features/auth/hooks/useAuth";
+import { CastingTab } from "@/features/casting/components/CastingTab";
 import { EditsTab } from "@/features/edits/components/EditsTab";
+import { LocationTab } from "@/features/locations/components/LocationTab";
 import { BriefTab } from "@/features/projects/components/BriefTab";
 import { getProject } from "@/features/projects/api";
 import type { Project } from "@/features/projects/types";
 import { ScriptTab } from "@/features/scripts/components/ScriptTab";
+import { ShootTab } from "@/features/shoots/components/ShootTab";
 import { ApiError } from "@/lib/api-client";
 
 export default function ProjectDetailPage() {
@@ -101,14 +104,14 @@ export default function ProjectDetailPage() {
         <TabsContent value="script" className="px-4 py-4 md:px-6">
           <ScriptTab project={project} role={auth.user.role} isOwner={isOwner} onProjectUpdated={setProject} />
         </TabsContent>
-        <TabsContent value="location" className="text-muted-foreground px-4 py-4 text-sm md:px-6">
-          Phase 2 — Task 2.4.1.
+        <TabsContent value="location" className="px-4 py-4 md:px-6">
+          <LocationTab project={project} />
         </TabsContent>
-        <TabsContent value="casting" className="text-muted-foreground px-4 py-4 text-sm md:px-6">
-          Phase 2 — Task 2.4.2.
+        <TabsContent value="casting" className="px-4 py-4 md:px-6">
+          <CastingTab project={project} />
         </TabsContent>
-        <TabsContent value="shoot" className="text-muted-foreground px-4 py-4 text-sm md:px-6">
-          Phase 2 — Task 2.4.3.
+        <TabsContent value="shoot" className="px-4 py-4 md:px-6">
+          <ShootTab project={project} />
         </TabsContent>
         <TabsContent value="edits" className="px-4 py-4 md:px-6">
           <EditsTab project={project} role={auth.user.role} isOwner={isOwner} onProjectUpdated={setProject} />

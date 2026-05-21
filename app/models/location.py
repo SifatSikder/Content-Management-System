@@ -7,9 +7,10 @@ from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.location_photo import LocationPhotoModel
 
 
 class LocationModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -31,6 +32,13 @@ class LocationModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     confirmed: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
+    )
+
+    photos: Mapped[list[LocationPhotoModel]] = relationship(
+        LocationPhotoModel,
+        cascade="all, delete-orphan",
+        order_by="LocationPhotoModel.created_at",
+        lazy="selectin",
     )
 
 

@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     # In dev, point the google-cloud-storage SDK at fake-gcs-server.
     storage_emulator_host: str | None = "http://localhost:4443"
     gcs_bucket_video: str = "sre-video-dev"
+    gcs_bucket_assets: str = "sre-assets-dev"  # location photos, cast release forms, call sheets
     gcs_bucket_backups: str = "sre-backups-dev"
     google_application_credentials: str | None = None
 
@@ -75,6 +76,15 @@ class Settings(BaseSettings):
     whatsapp_token: str | None = None
     whatsapp_phone_number_id: str | None = None
     whatsapp_group_id: str | None = None
+
+    # --- Web Push (VAPID) --------------------------------------------------
+    # Generate with `uv run python scripts/gen_vapid_keys.py`. Private key
+    # is the PEM of an EC P-256 keypair; public key is the matching PEM.
+    # The frontend reads the public key (as base64url raw EC point) from
+    # GET /push/vapid-public-key.
+    vapid_private_pem: str | None = None
+    vapid_public_pem: str | None = None
+    vapid_subject: str | None = None  # e.g. "mailto:ceo@example.com"
 
     # --- Computed flags ----------------------------------------------------
     @computed_field  # type: ignore[prop-decorator]

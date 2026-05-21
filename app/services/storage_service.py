@@ -107,8 +107,17 @@ async def signed_read_url(
     bucket_name: str,
     object_name: str,
     expires_in_seconds: int = 900,
+    response_content_type: str | None = None,
+    response_content_disposition: str | None = None,
 ) -> str:
     """Return a read URL for the given object.
+
+    `response_content_type` / `response_content_disposition` override what
+    Chrome sees on the response, regardless of what was stored. We use this
+    for documents (PDFs, images shown in-app) so the browser renders inline
+    instead of downloading — fake-gcs and prod-GCS both store the upload
+    Content-Type unreliably for resumable uploads, so always pass the desired
+    response type explicitly when minting a URL.
 
     Prod: V4 signed URL with the configured TTL.
     Dev (emulator): a public download URL — fake-gcs-server doesn't validate
@@ -120,8 +129,17 @@ async def signed_read_url(
     def _sync() -> str:
         if settings.storage_emulator_host:
             host = settings.storage_emulator_host.rstrip("/")
-            # The download endpoint is `/storage/v1/b/<bucket>/o/<object>?alt=media`.
-            return f"{host}/storage/v1/b/{bucket_name}/o/{quote(object_name, safe='')}?alt=media"
+            qs = [f"alt=media"]
+            if response_content_type is not None:
+                qs.append(f"response-content-type={quote(response_content_type, safe='')}")
+            if response_content_disposition is not None:
+                qs.append(
+                    f"response-content-disposition={quote(response_content_disposition, safe='')}"
+                )
+            return (
+                f"{host}/storage/v1/b/{bucket_name}/o/"
+                f"{quote(object_name, safe='')}?{'&'.join(qs)}"
+            )
 
         bucket = _ensure_bucket(bucket_name)
         blob = bucket.blob(object_name)  # type: ignore[attr-defined]
@@ -129,6 +147,8 @@ async def signed_read_url(
             version="v4",
             expiration=_dt.timedelta(seconds=expires_in_seconds),
             method="GET",
+            response_type=response_content_type,
+            response_disposition=response_content_disposition,
         )
         return url
 
