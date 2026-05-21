@@ -11,7 +11,7 @@ published, with emphasis on the editing-review phase.
 - **Frontend** — Next.js 15 (App Router) + React 19 + TypeScript + Tailwind v4 + shadcn/ui
 - **Database** — PostgreSQL 16
 - **Cache / queue** — Redis 7 + `arq` (Phase 2+)
-- **Storage** — Google Cloud Storage (Phase 1+); `fake-gcs-server` in dev
+- **Storage** — Google Cloud Storage (a dev-only bucket with a 7-day lifecycle rule keeps cost negligible)
 - **Hosting** — Hostinger VPS behind Caddy (Phase 5)
 
 See `project_spec.md` for functional scope and `implementation_plan.md` for the
@@ -111,7 +111,6 @@ make db-migration MSG="add foo"    # create an Alembic migration
 make db-upgrade                    # apply migrations
 make lint                          # ruff + codespell + no-raw-fetch + pnpm lint
 make typecheck                     # mypy + tsc
-make test                          # pytest (Phase 1+ adds frontend tests)
 ```
 
 ## Project structure
@@ -141,7 +140,7 @@ make test                          # pytest (Phase 1+ adds frontend tests)
 │           └── api-client.ts   # SINGLE transport layer
 ├── infra/               # Caddyfile, systemd units, deploy scripts (Phase 5)
 ├── scripts/             # one-off CLI utilities
-├── docker-compose.yml   # local Postgres + Redis + fake-gcs-server
+├── docker-compose.yml   # local Postgres + Redis
 ├── pyproject.toml       # uv-managed Python deps
 └── Makefile             # canonical entrypoint
 ```

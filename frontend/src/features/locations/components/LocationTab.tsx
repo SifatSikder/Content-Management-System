@@ -206,8 +206,8 @@ function LocationRow({ location, onChanged }: { location: Location; onChanged: (
 
   async function onUpload(files: File[]) {
     // Multi-upload: run each file through the resumable pipeline in
-    // sequence so we don't saturate the network on phones. fake-gcs handles
-    // parallel uploads fine but real GCS rate-limits aggressively.
+    // sequence so we don't saturate the network on phones — real GCS
+    // rate-limits aggressively on parallel uploads from one client.
     const valid = files.filter((f) => {
       if (f.size > PHOTO_MAX_BYTES) {
         toast.error(t("photo_too_large_named", { name: f.name }));

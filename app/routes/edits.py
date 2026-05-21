@@ -6,7 +6,7 @@ import uuid
 from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -72,6 +72,7 @@ def _new_object_name(project_id: uuid.UUID, content_type: str) -> str:
 async def post_init_upload(
     body: InitUploadBody,
     project: Annotated[ProjectModel, Depends(require_project_access(ProjectAccess.EDIT))],
+    request: Request,
 ) -> InitUploadResponse:
     if body.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
@@ -83,11 +84,19 @@ async def post_init_upload(
     bucket = settings.gcs_bucket_video
     object_name = _new_object_name(project.id, body.content_type)
 
+    # Pass the request's Origin through so GCS binds the resumable session to
+    # this origin AND echoes Access-Control-Allow-Origin on the PUT response.
+    # Without this, the upload bytes land in the bucket fine but the browser
+    # rejects the response for missing CORS headers, fetch() throws, and the
+    # finalize step never fires.
+    origin = request.headers.get("origin")
+
     session_url = await storage_service.create_resumable_upload_session(
         bucket_name=bucket,
         object_name=object_name,
         content_type=body.content_type,
         size_bytes=body.size_bytes,
+        origin=origin,
     )
     log.info(
         "edit_upload_init",
@@ -95,6 +104,7 @@ async def post_init_upload(
         bucket=bucket,
         object_name=object_name,
         size_bytes=body.size_bytes,
+        origin=origin,
     )
     return InitUploadResponse(
         upload_session_url=session_url,

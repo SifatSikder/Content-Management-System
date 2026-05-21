@@ -297,17 +297,15 @@ function ReleaseThumbnail({ castId, castName }: { castId: string; castName: stri
   const [open, setOpen] = useState(false);
   const [info, setInfo] = useState<{
     url: string; // direct signed URL — for <img>
-    blobUrl: string | null; // typed-blob URL — used for PDF iframe to bypass fake-gcs's wrong MIME
+    blobUrl: string | null; // typed-blob URL — used for PDF iframe to force correct MIME
     contentType: string;
   } | null>(null);
   const [errored, setErrored] = useState(false);
 
   // Lazy-load the signed URL on mount. For PDFs we also fetch the bytes and
   // re-wrap them in a Blob with the correct MIME so Chrome's iframe will
-  // render inline — fake-gcs serves all uploads as application/octet-stream
-  // and ignores the response-content-type override. Same workaround is safe
-  // against real GCS too: if the stored Content-Type is already correct, the
-  // re-wrapped Blob just matches.
+  // render inline — resumable uploads land with unreliable Content-Type, so
+  // forcing the MIME client-side is the cleanest fix.
   useEffect(() => {
     let cancelled = false;
     let createdBlobUrl: string | null = null;

@@ -1,0 +1,18 @@
+[
+  {
+    "origin": ["http://localhost:3000", "http://localhost:3001"],
+    "method": ["GET", "PUT", "POST", "DELETE", "HEAD"],
+    "responseHeader": [
+      "Content-Type",
+      "Content-Range",
+      "Content-Disposition",
+      "Authorization",
+      "x-goog-resumable",
+      "x-goog-content-length-range",
+      "ETag",
+      "Range",
+      "Access-Control-Allow-Origin"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]

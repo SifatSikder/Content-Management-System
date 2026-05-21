@@ -1,5 +1,6 @@
-# Local dev stack: Postgres + Redis + fake-gcs-server (a GCS-compatible
-# emulator). All three pin volumes by name so data survives `down`.
+# Local dev stack: Postgres + Redis. Volumes are pinned by name so data
+# survives `down`. Object storage talks to real GCS (see app/config.py and
+# .env.local); there is no local storage emulator.
 #
 # Brought up by `make up`, torn down by `make down`.
 
@@ -38,27 +39,6 @@ services:
       timeout: 3s
       retries: 10
 
-  fake-gcs:
-    # Local Google Cloud Storage emulator. The google-cloud-storage SDK will
-    # talk to this when STORAGE_EMULATOR_HOST is set (see app/config.py).
-    image: fsouza/fake-gcs-server:latest
-    container_name: sre_fake_gcs
-    restart: unless-stopped
-    command:
-      - "-scheme"
-      - "http"
-      - "-port"
-      - "4443"
-      - "-public-host"
-      - "localhost:4443"
-      - "-data"
-      - "/data"
-    ports:
-      - "4443:4443"
-    volumes:
-      - fake_gcs_data:/data
-
 volumes:
   postgres_data:
   redis_data:
-  fake_gcs_data:

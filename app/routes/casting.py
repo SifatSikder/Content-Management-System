@@ -261,7 +261,7 @@ async def get_release_url(
         object_name=cast.release_form_object_name,
         expires_in_seconds=_RELEASE_URL_TTL_SECONDS,
         # Force inline rendering so Chrome shows the PDF in an iframe rather
-        # than downloading (fake-gcs stores the upload as octet-stream).
+        # than downloading — resumable uploads land with unreliable Content-Type.
         response_content_type=content_type,
         response_content_disposition="inline",
     )

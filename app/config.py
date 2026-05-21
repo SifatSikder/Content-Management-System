@@ -58,8 +58,10 @@ class Settings(BaseSettings):
     ceo_initial_password: str | None = None  # required at seed time
 
     # --- Storage (GCS) -----------------------------------------------------
-    # In dev, point the google-cloud-storage SDK at fake-gcs-server.
-    storage_emulator_host: str | None = "http://localhost:4443"
+    # Credentials are picked up from GOOGLE_APPLICATION_CREDENTIALS (a
+    # service-account JSON key path). Dev and prod both talk to real GCS;
+    # use a separate dev bucket (e.g. with a 7-day lifecycle rule) to keep
+    # cost low and avoid leaking dev assets into the prod bucket.
     gcs_bucket_video: str = "sre-video-dev"
     gcs_bucket_assets: str = "sre-assets-dev"  # location photos, cast release forms, call sheets
     gcs_bucket_backups: str = "sre-backups-dev"

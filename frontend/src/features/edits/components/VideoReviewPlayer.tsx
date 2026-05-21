@@ -55,8 +55,8 @@ export const VideoReviewPlayer = forwardRef<VideoReviewPlayerHandle, Props>(
         if (!v) return;
         v.currentTime = seconds;
         // play() rejects with NotSupportedError when the source can't be
-        // decoded (common against fake-gcs-server placeholder bytes in dev).
-        // Swallow — the <video onError> handler surfaces a UI-visible error.
+        // decoded. Swallow — the <video onError> handler surfaces a UI-
+        // visible error if it matters.
         v.play().catch(() => {});
       },
     }));

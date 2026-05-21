@@ -43,3 +43,4 @@ gcp-key*.json
 
 # --- Generated ---
 openapi.json
+.secrets/

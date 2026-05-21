@@ -28,7 +28,7 @@ install: ## install python + node deps
 # --- Docker stack -----------------------------------------------------------
 
 .PHONY: up
-up: ## start postgres + redis + fake-gcs-server
+up: ## start postgres + redis
 	docker compose up -d
 
 .PHONY: down
@@ -92,10 +92,6 @@ fmt: ## auto-format python + frontend
 typecheck: ## mypy on backend + tsc on frontend
 	uv run mypy app
 	cd frontend && pnpm tsc --noEmit
-
-.PHONY: test
-test: ## pytest backend + frontend tests (when present)
-	uv run pytest
 
 .PHONY: openapi
 openapi: ## export FastAPI OpenAPI schema to openapi.json

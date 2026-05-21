@@ -1,8 +1,8 @@
 """Edit version + comment models.
 
 An `EditVersionModel` is one uploaded cut (V1, V2, …). The video bytes live in
-GCS (or fake-gcs-server in dev); we store the bucket + object name + content
-type + size. Comments are timestamped against the video timeline.
+GCS; we store the bucket + object name + content type + size. Comments are
+timestamped against the video timeline.
 
 `resolved_comments` is a JSONB array of comment-ids the uploader claims to have
 addressed in this version — surfaced as a checklist in the V2 upload UI.

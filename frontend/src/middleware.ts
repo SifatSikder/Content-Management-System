@@ -69,6 +69,13 @@ async function readSession(req: NextRequest): Promise<SessionClaims | null> {
 
 export async function middleware(req: NextRequest): Promise<NextResponse> {
   const { pathname } = req.nextUrl;
+
+  // Never gate /api/auth/* — NextAuth needs unimpeded access to its own
+  // route handlers regardless of auth state. Redirecting these (e.g. when
+  // must_change_password=true) would force JSON-expecting clients to parse
+  // the change-password page HTML and throw ClientFetchError.
+  if (pathname.startsWith("/api/auth/")) return NextResponse.next();
+
   const session = await readSession(req);
 
   if (!session) {

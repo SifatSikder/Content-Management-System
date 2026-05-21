@@ -33,10 +33,6 @@ dev = [
     "ruff>=0.7.0",
     "mypy>=1.13.0",
     "codespell>=2.3.0",
-    "pytest>=8.3.0",
-    "pytest-asyncio>=0.24.0",
-    "pytest-cov>=6.0.0",
-    "respx>=0.21.1",
     "types-passlib",
 ]
 
@@ -82,10 +78,3 @@ ignore_missing_imports = true
 [tool.codespell]
 skip = "*.lock,uv.lock,pnpm-lock.yaml,*.min.js,*.min.css,frontend/.next/**,frontend/node_modules/**,frontend/public/**,.git/**,frontend/messages/nl.json,project_spec.md"
 ignore-words-list = "te,categorie,onze,dele"
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "session"
-asyncio_default_test_loop_scope = "session"
-testpaths = ["tests"]
-addopts = "-ra --strict-markers"
