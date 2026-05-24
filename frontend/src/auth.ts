@@ -36,7 +36,8 @@ const JWT_TTL_SECONDS = 3600;
 const DUMMY_PASSWORD_HASH =
   "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW";
 
-// Augment NextAuth types so callers see role + must_change_password + accessToken.
+// Augment NextAuth types so callers see role + must_change_password +
+// is_super_admin + accessToken.
 declare module "next-auth" {
   interface Session {
     accessToken?: string;
@@ -44,6 +45,7 @@ declare module "next-auth" {
       id: string;
       role: Role;
       must_change_password: boolean;
+      is_super_admin: boolean;
     } & DefaultSession["user"];
   }
   interface User {
@@ -153,6 +155,7 @@ const config: NextAuthConfig = {
         picture: t.picture,
         role: t.role,
         must_change_password: t.must_change_password,
+        is_super_admin: t.is_super_admin,
       };
       return await new SignJWT(payload)
         .setProtectedHeader({ alg: "HS256", typ: "JWT" })
@@ -205,6 +208,9 @@ const config: NextAuthConfig = {
         (token as Record<string, unknown>).role = user.role;
         (token as Record<string, unknown>).must_change_password =
           user.must_change_password ?? false;
+        // CEO super-admin is the only platform-wide bypass for RLS + business
+        // membership checks. Mirrors `UserModel.is_super_admin` on the backend.
+        (token as Record<string, unknown>).is_super_admin = user.role === "ceo";
       }
       return token;
     },
@@ -213,6 +219,7 @@ const config: NextAuthConfig = {
       session.user.id = token.sub!;
       session.user.role = (t.role as Role) ?? "viewer";
       session.user.must_change_password = Boolean(t.must_change_password);
+      session.user.is_super_admin = Boolean(t.is_super_admin);
       session.user.name = (t.name as string | undefined) ?? session.user.name ?? null;
       session.user.image = (t.picture as string | undefined) ?? session.user.image ?? null;
 

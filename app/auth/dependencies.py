@@ -35,8 +35,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.jwt import InvalidTokenError, decode_access_token
-from app.models.base import get_session
-from app.models.enums import PipelineStage, Role
+from app.core.business_context import business_scoped_session
+from app.models.business import BusinessModel
+from app.models.business_membership import BusinessMembershipModel
+from app.models.enums import BusinessMembershipStatus, PipelineStage, Role
 from app.models.project import ProjectModel
 from app.models.user import UserModel
 
@@ -56,7 +58,7 @@ class ProjectAccess(StrEnum):
     MANAGE = "manage"
 
 
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
+SessionDep = Annotated[AsyncSession, Depends(business_scoped_session)]
 
 
 async def current_user(request: Request, session: SessionDep) -> UserModel:
@@ -186,12 +188,77 @@ def can_user_move_to_stage(
     return False
 
 
+async def require_business_member(
+    session: SessionDep,
+    user: CurrentUser,
+    business_id: Annotated[uuid.UUID, Path()],
+) -> BusinessMembershipModel | None:
+    """403 unless the current user is the CEO or an active member.
+
+    Returns `None` for the CEO (super-admin) — callers should not rely on
+    the return value beyond `Depends(...)`-style gating. The path parameter
+    must literally be named `business_id`.
+    """
+    if user.is_super_admin:
+        return None
+    result = await session.execute(
+        select(BusinessMembershipModel).where(
+            BusinessMembershipModel.business_id == business_id,
+            BusinessMembershipModel.user_id == user.id,
+            BusinessMembershipModel.status == BusinessMembershipStatus.ACTIVE,
+        )
+    )
+    membership = result.scalar_one_or_none()
+    if membership is None:
+        log.warning(
+            "business_member_required_denied",
+            user_id=str(user.id),
+            business_id=str(business_id),
+        )
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Not a member of this business"
+        )
+    return membership
+
+
+async def require_business_admin(
+    session: SessionDep,
+    user: CurrentUser,
+    business_id: Annotated[uuid.UUID, Path()],
+) -> BusinessModel:
+    """403 unless the user is the CEO or the business's owner.
+
+    Returns the `BusinessModel` row so the route handler can reuse it
+    without a second lookup. The path parameter must literally be named
+    `business_id`.
+    """
+    result = await session.execute(
+        select(BusinessModel).where(
+            BusinessModel.id == business_id,
+            BusinessModel.deleted_at.is_(None),
+        )
+    )
+    business = result.scalar_one_or_none()
+    if business is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Business not found")
+    if not user.is_super_admin and business.owner_user_id != user.id:
+        log.warning(
+            "business_admin_required_denied",
+            user_id=str(user.id),
+            business_id=str(business_id),
+        )
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Business admin only")
+    return business
+
+
 __all__ = [
     "CurrentUser",
     "ProjectAccess",
     "SessionDep",
     "can_user_move_to_stage",
     "current_user",
+    "require_business_admin",
+    "require_business_member",
     "require_project_access",
     "require_role",
 ]

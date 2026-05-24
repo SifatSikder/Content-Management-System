@@ -91,7 +91,16 @@ class TokenPurpose(StrEnum):
     PASSWORD_RESET = "password_reset"
 
 
+class BusinessMembershipStatus(StrEnum):
+    """Lifecycle of a user's membership in a business."""
+
+    INVITED = "invited"
+    ACTIVE = "active"
+    REVOKED = "revoked"
+
+
 __all__ = [
+    "BusinessMembershipStatus",
     "Category",
     "EditStatus",
     "PipelineStage",

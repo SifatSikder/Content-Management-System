@@ -118,6 +118,22 @@ async function getAccessToken(): Promise<string | null> {
   }
 }
 
+/**
+ * Reads the `atlas.business` cookie set by `useCurrentBusiness`. Returned to
+ * the backend as `X-Business-Id`, which `BusinessContextMiddleware` uses to
+ * scope RLS for non-CEO users. CEO super-admins ignore it server-side but
+ * the header is still useful for log correlation.
+ */
+function getCurrentBusinessId(): string | null {
+  if (typeof document === "undefined") return null;
+  const prefix = "atlas.business=";
+  const found = document.cookie
+    .split(";")
+    .map((c) => c.trim())
+    .find((c) => c.startsWith(prefix));
+  return found ? decodeURIComponent(found.slice(prefix.length)) : null;
+}
+
 async function request<T>(
   path: string,
   init: RequestInit | undefined,
@@ -139,6 +155,14 @@ async function request<T>(
 
   if (token && !headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  // Inject the active business id for *authed* requests only. Anonymous
+  // requests have no business context, and same-origin /api/auth/* calls
+  // use `localFetch` which doesn't go through `request`.
+  if (token && !headers.has("X-Business-Id")) {
+    const bid = getCurrentBusinessId();
+    if (bid) headers.set("X-Business-Id", bid);
   }
 
   if (!headers.has("Accept")) {

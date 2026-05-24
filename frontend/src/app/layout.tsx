@@ -21,8 +21,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sons Real Estate CMS",
-  description: "Content production CRM for Sons Real Estate",
+  title: "Atlas",
+  description: "Atlas — operations across every business.",
 };
 
 export default async function RootLayout({

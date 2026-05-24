@@ -77,7 +77,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     await sendInvitationEmail({
       to: email,
       inviteeName: name,
-      inviterName: inviter?.name ?? "Sons Real Estate",
+      inviterName: inviter?.name ?? "Atlas",
       acceptUrl: url,
     });
   } catch (err) {

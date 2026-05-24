@@ -68,5 +68,14 @@ class UserModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         DateTime(timezone=True), nullable=True
     )
 
+    @property
+    def is_super_admin(self) -> bool:
+        """True iff this user is the platform-wide CEO super-admin.
+
+        Used by the business-context middleware and `require_business_*`
+        dependencies — CEO bypasses business membership checks and RLS.
+        """
+        return self.role == Role.CEO
+
 
 __all__ = ["UserModel"]

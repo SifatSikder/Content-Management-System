@@ -18,11 +18,21 @@ from app.models import Base
 # --- Import every ORM module so autogenerate sees its tables. ---
 # Add new imports here as new model files are created.
 from app.models import activity as _activity  # noqa: F401
+from app.models import business as _business  # noqa: F401
+from app.models import business_membership as _business_membership  # noqa: F401
 from app.models import cast_member as _cast_member  # noqa: F401
+from app.models import connected_google_account as _connected_google_account  # noqa: F401
+from app.models import department as _department  # noqa: F401
+from app.models import department_membership as _department_membership  # noqa: F401
+from app.models import department_role as _department_role  # noqa: F401
+from app.models import department_role_permission as _department_role_permission  # noqa: F401
+from app.models import department_stage as _department_stage  # noqa: F401
+from app.models import department_template as _department_template  # noqa: F401
 from app.models import edit as _edit  # noqa: F401
 from app.models import location as _location  # noqa: F401
 from app.models import location_photo as _location_photo  # noqa: F401
 from app.models import notification as _notification  # noqa: F401
+from app.models import notification_prefs as _notification_prefs  # noqa: F401
 from app.models import one_time_token as _one_time_token  # noqa: F401
 from app.models import project as _project  # noqa: F401
 from app.models import script as _script  # noqa: F401

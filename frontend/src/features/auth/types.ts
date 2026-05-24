@@ -7,6 +7,8 @@ export interface AuthUser {
   name: string;
   role: Role;
   must_change_password: boolean;
+  /** True iff this user is the CEO super-admin. Bypasses RLS + business membership checks. */
+  is_super_admin: boolean;
   /** Cached Google profile picture URL, or null if the user has never used Google sign-in. */
   image: string | null;
 }

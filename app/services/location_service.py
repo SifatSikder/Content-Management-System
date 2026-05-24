@@ -14,9 +14,9 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.enums import PipelineStage
 from app.models.location import LocationModel
 from app.models.location_photo import LocationPhotoModel
-from app.models.enums import PipelineStage
 from app.models.project import ProjectModel
 from app.models.user import UserModel
 from app.services import activity_service

@@ -28,10 +28,37 @@ class ProjectModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     category: Mapped[Category] = mapped_column(
         pg_enum(Category, name="category"), nullable=False
     )
+    # Legacy hard-coded pipeline stage. Phase A keeps it for the existing
+    # real-estate flow; Phase B switches the kanban over to `stage_id` and
+    # this column is dropped after one release.
     stage: Mapped[PipelineStage] = mapped_column(
         pg_enum(PipelineStage, name="pipeline_stage"),
         nullable=False,
         default=PipelineStage.IDEA,
+        index=True,
+    )
+
+    # --- Multi-business scaffolding (Phase A) ------------------------------
+    # All three are nullable in Phase A — existing rows have no business or
+    # department yet. Phase B backfills them when the real-estate flow is
+    # migrated into the "Content Creation" department template under a
+    # "Sons Real Estate" business and then flips these NOT NULL.
+    business_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("businesses.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    department_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("departments.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    stage_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("department_stages.id", ondelete="RESTRICT"),
+        nullable=True,
         index=True,
     )
 

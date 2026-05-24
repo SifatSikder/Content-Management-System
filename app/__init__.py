@@ -1,1 +1,1 @@
-"""Sons Real Estate — Content Production CRM (backend)."""
+"""Atlas — multi-business operations platform (backend)."""

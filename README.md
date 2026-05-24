@@ -1,9 +1,15 @@
-# Sons Real Estate — Content Production CRM
+# Atlas — multi-business operations platform
 
-Internal video-production pipeline tool for Sons Real Estate
-([sonsrealestate.nl](https://sonsrealestate.nl)). Replaces a WhatsApp-only
-workflow with a structured system that tracks every video from idea →
-published, with emphasis on the editing-review phase.
+Atlas is a multi-tenant operations platform: the CEO spins up businesses,
+defines departments inside each, and assigns roles + workflows per
+department. The first tenant ("Sons Real Estate") drives a Dutch real-estate
+video-production pipeline (idea → script → shoot → editing → published) that
+replaced a WhatsApp-only workflow; subsequent businesses can ship marketing
+funnels, sales pipelines, or any other operation on the same engine.
+
+The repository name stays `sons-realestate-cms` for CI continuity; the
+product brand is **Atlas** (login page, email From-name, HTML title). See
+`.plans/README.md` for the phased migration plan.
 
 ## Stack
 

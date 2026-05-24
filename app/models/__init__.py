@@ -7,10 +7,19 @@ to this list or autogenerate will miss it.
 
 from app.models.activity import ActivityModel
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.business import BusinessModel
+from app.models.business_membership import BusinessMembershipModel
 from app.models.cast_member import CastMemberModel
 from app.models.connected_google_account import ConnectedGoogleAccountModel
+from app.models.department import DepartmentModel
+from app.models.department_membership import DepartmentMembershipModel
+from app.models.department_role import DepartmentRoleModel
+from app.models.department_role_permission import DepartmentRolePermissionModel
+from app.models.department_stage import DepartmentStageModel
+from app.models.department_template import DepartmentTemplateModel
 from app.models.edit import EditCommentModel, EditVersionModel
 from app.models.enums import (
+    BusinessMembershipStatus,
     Category,
     EditStatus,
     PipelineStage,
@@ -31,9 +40,18 @@ from app.models.user import UserModel
 __all__ = [
     "ActivityModel",
     "Base",
+    "BusinessMembershipModel",
+    "BusinessMembershipStatus",
+    "BusinessModel",
     "CastMemberModel",
     "Category",
     "ConnectedGoogleAccountModel",
+    "DepartmentMembershipModel",
+    "DepartmentModel",
+    "DepartmentRoleModel",
+    "DepartmentRolePermissionModel",
+    "DepartmentStageModel",
+    "DepartmentTemplateModel",
     "EditCommentModel",
     "EditStatus",
     "EditVersionModel",

@@ -48,7 +48,7 @@ export async function POST(
     await sendInvitationEmail({
       to: target.email,
       inviteeName: target.name,
-      inviterName: inviter?.name ?? "Sons Real Estate",
+      inviterName: inviter?.name ?? "Atlas",
       acceptUrl: url,
     });
   } catch (err) {

@@ -23,7 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.jwt import InvalidTokenError, decode_access_token
-from app.models.base import get_session
+from app.core.business_context import business_scoped_session
 from app.models.user import UserModel
 from app.schemas.auth import UserPublic
 
@@ -31,7 +31,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 log = structlog.get_logger(__name__)
 
 
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
+SessionDep = Annotated[AsyncSession, Depends(business_scoped_session)]
 
 
 @router.get("/me", response_model=UserPublic, summary="Current user from the JWT")

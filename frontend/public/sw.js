@@ -1,4 +1,4 @@
-/* Sons Real Estate CMS — service worker.
+/* Atlas — service worker.
  *
  * Two jobs:
  *   1. Installability — `display: standalone` from the manifest needs an

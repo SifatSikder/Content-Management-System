@@ -24,6 +24,17 @@ import { jwtVerify } from "jose";
 const PUBLIC_PATHS = ["/", "/accept-invite", "/reset-password"];
 const CHANGE_PASSWORD_PATH = "/change-password";
 const DEFAULT_AUTHED_DESTINATION = "/projects";
+const ONBOARDING_PATH = "/businesses/select";
+
+/**
+ * Paths a non-CEO user with zero business memberships is still allowed to
+ * reach (otherwise the redirect to `/businesses/select` becomes a loop). Keep
+ * this list narrow — onboarding + sign-out + the change-password flow only.
+ */
+const NO_MEMBERSHIP_ALLOWED = new Set<string>([
+  ONBOARDING_PATH,
+  CHANGE_PASSWORD_PATH,
+]);
 
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.includes(pathname)) return true;
@@ -41,6 +52,7 @@ function secretKey(): Uint8Array | null {
 interface SessionClaims {
   sub: string;
   must_change_password: boolean;
+  is_super_admin: boolean;
 }
 
 async function readSession(req: NextRequest): Promise<SessionClaims | null> {
@@ -56,11 +68,11 @@ async function readSession(req: NextRequest): Promise<SessionClaims | null> {
     const { payload } = await jwtVerify(token, key);
     const sub = typeof payload.sub === "string" ? payload.sub : null;
     if (!sub) return null;
+    const claims = payload as Record<string, unknown>;
     return {
       sub,
-      must_change_password: Boolean(
-        (payload as Record<string, unknown>).must_change_password,
-      ),
+      must_change_password: Boolean(claims.must_change_password),
+      is_super_admin: Boolean(claims.is_super_admin),
     };
   } catch {
     return null;
@@ -92,6 +104,21 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
     url.pathname = CHANGE_PASSWORD_PATH;
     url.search = "";
     return NextResponse.redirect(url);
+  }
+
+  // A non-CEO authed user with no `atlas.business` cookie has either never
+  // picked a business or has none. Pin them to the onboarding page; CEO
+  // super-admins skip this branch entirely (they can roam without a
+  // membership row). The cookie is set by `useCurrentBusiness` on first
+  // load *if* the user has at least one membership.
+  if (!session.is_super_admin) {
+    const businessCookie = req.cookies.get("atlas.business")?.value;
+    if (!businessCookie && !NO_MEMBERSHIP_ALLOWED.has(pathname)) {
+      const url = req.nextUrl.clone();
+      url.pathname = ONBOARDING_PATH;
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
   }
 
   if (pathname === "/") {

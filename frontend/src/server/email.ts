@@ -54,7 +54,9 @@ function buildMessage(opts: { to: string; subject: string; html: string }): stri
   const { sender } = readConfig();
   const lines = [
     `To: ${opts.to}`,
-    `From: ${sender}`,
+    // RFC 5322 display-name + addr-spec so the inbox shows "Atlas" instead
+    // of the raw sender mailbox.
+    `From: Atlas <${sender}>`,
     `Subject: ${opts.subject}`,
     "MIME-Version: 1.0",
     'Content-Type: text/html; charset="utf-8"',
@@ -107,7 +109,7 @@ function brandedShell(opts: {
       <tr><td align="center">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background:${_CARD};border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,0.08);overflow:hidden;">
           <tr><td style="padding:32px 32px 8px 32px;">
-            <div style="font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:${_MUTED};margin-bottom:8px;">Sons Real Estate</div>
+            <div style="font-size:13px;letter-spacing:0.06em;text-transform:uppercase;color:${_MUTED};margin-bottom:8px;">Atlas</div>
             <h1 style="margin:0 0 12px 0;font-size:22px;font-weight:600;color:${_TEXT};">${escapeHtml(opts.heading)}</h1>
             <p style="margin:0 0 24px 0;font-size:15px;line-height:1.55;color:${_TEXT};">${escapeHtml(opts.body)}</p>
             <p style="margin:0 0 24px 0;"><a href="${safeLink}" style="display:inline-block;padding:12px 22px;background:${_ACCENT};color:${_ACCENT_TEXT};text-decoration:none;border-radius:8px;font-weight:600;font-size:15px;">${escapeHtml(opts.cta)}</a></p>
@@ -131,16 +133,16 @@ export async function sendInvitationEmail(opts: {
   inviterName: string;
   acceptUrl: string;
 }): Promise<void> {
-  const subject = `${opts.inviterName} has invited you to Sons Real Estate CMS`;
+  const subject = `${opts.inviterName} has invited you to Atlas`;
   const html = brandedShell({
     preheader: "Activate your account. The link is valid for 7 days.",
     heading: `Welcome, ${opts.inviteeName}`,
-    body: `${opts.inviterName} has invited you to join the Sons Real Estate content production team. Click the button below to set a password and activate your account.`,
+    body: `${opts.inviterName} has invited you to join Atlas. Click the button below to set a password and activate your account.`,
     cta: "Activate account",
     link: opts.acceptUrl,
     fallbackIntro: "Button not working? Copy this URL into your browser:",
     ttlNote: "This link is valid for 7 days and can be used only once.",
-    footer: "You received this email because someone invited you to Sons Real Estate CMS. If this wasn't expected, ignore this email.",
+    footer: "You received this email because someone invited you to Atlas. If this wasn't expected, ignore this email.",
   });
   await sendHtmlEmail({ to: opts.to, subject, html });
 }
@@ -149,7 +151,7 @@ export async function sendPasswordResetEmail(opts: {
   to: string;
   resetUrl: string;
 }): Promise<void> {
-  const subject = "Reset your Sons Real Estate CMS password";
+  const subject = "Reset your Atlas password";
   const html = brandedShell({
     preheader: "Reset your password. The link is valid for 1 hour.",
     heading: "Reset your password",

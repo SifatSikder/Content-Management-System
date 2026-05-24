@@ -13,9 +13,9 @@ import type { MetadataRoute } from "next";
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Sons Real Estate CMS",
-    short_name: "Sons RE",
-    description: "Content production CRM for Sons Real Estate",
+    name: "Atlas",
+    short_name: "Atlas",
+    description: "Atlas — operations across every business.",
     start_url: "/projects",
     display: "standalone",
     background_color: "#fafafa",
