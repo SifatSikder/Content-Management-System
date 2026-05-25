@@ -22,11 +22,13 @@ from app.auth.dependencies import (
     require_project_access,
 )
 from app.config import get_settings
-from app.core.crypto import TokenEncryptionNotConfiguredError
+from app.core.crypto import TokenDecryptionError, TokenEncryptionNotConfiguredError
 from app.models.project import ProjectModel
 from app.schemas.drive import (
     AttachDriveBody,
     DriveConnectionPublic,
+    DriveDocumentListResponse,
+    DriveDocumentPublic,
     StartConnectResponse,
 )
 from app.schemas.project import ProjectPublic
@@ -35,12 +37,79 @@ from app.services.drive_service import (
     DriveNotConfiguredError,
     GoogleApiError,
     InvalidOAuthStateError,
+    NotConnectedError,
 )
 
 log = structlog.get_logger(__name__)
 
 auth_router = APIRouter(prefix="/auth/google/drive", tags=["drive"])
 projects_router = APIRouter(prefix="/projects/{project_id}/drive", tags=["drive"])
+files_router = APIRouter(prefix="/drive", tags=["drive"])
+
+
+@files_router.get(
+    "/documents",
+    response_model=DriveDocumentListResponse,
+    summary="List the calling user's Google Docs from Drive (newest-modified first)",
+)
+async def get_documents(
+    user: CurrentUser,
+    session: SessionDep,
+    q: Annotated[str | None, Query(description="Title substring filter")] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> DriveDocumentListResponse:
+    """Surface the user's Google Docs for the import picker.
+
+    Returns 412 if the user hasn't connected Drive yet — the frontend
+    catches that and routes them through the OAuth consent flow instead
+    of throwing.
+    """
+    try:
+        access_token = await drive_service.access_token_for_user(
+            session, user_id=user.id
+        )
+    except NotConnectedError as exc:
+        raise HTTPException(
+            status.HTTP_412_PRECONDITION_FAILED,
+            "Drive is not connected",
+        ) from exc
+    except (DriveNotConfiguredError, TokenEncryptionNotConfiguredError) as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Drive is not configured on this server",
+        ) from exc
+    except TokenDecryptionError as exc:
+        await drive_service.delete_connection(session, user_id=user.id)
+        await session.commit()
+        raise HTTPException(
+            status.HTTP_412_PRECONDITION_FAILED,
+            "Drive credentials are stale; reconnect",
+        ) from exc
+
+    try:
+        files = await drive_service.list_documents(
+            access_token=access_token, query=q, page_size=limit
+        )
+    except GoogleApiError as exc:
+        if exc.status_code in (401, 403):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, "Drive denied the request"
+            ) from exc
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, "Drive returned an error"
+        ) from exc
+
+    return DriveDocumentListResponse(
+        items=[
+            DriveDocumentPublic(
+                id=f["id"],
+                name=f.get("name", ""),
+                modified_time=f.get("modifiedTime"),
+                web_view_link=f.get("webViewLink"),
+            )
+            for f in files
+        ]
+    )
 
 
 # ---------- per-user OAuth ----------
@@ -171,4 +240,4 @@ async def delete_attach(
     return ProjectPublic.model_validate(project)
 
 
-__all__ = ["auth_router", "projects_router"]
+__all__ = ["auth_router", "files_router", "projects_router"]

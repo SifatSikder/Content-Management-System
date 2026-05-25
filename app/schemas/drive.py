@@ -34,9 +34,28 @@ class ImportGdocBody(BaseModel):
     document: str = Field(min_length=10, max_length=2048)
 
 
+class DriveDocumentPublic(BaseModel):
+    """One row in the Drive picker — what the script-import dialog renders.
+
+    `web_view_link` is the user-facing URL (clickable to inspect the source
+    doc in Drive). `id` is what we pass back to `/scripts/import-gdoc`.
+    """
+
+    id: str
+    name: str
+    modified_time: datetime | None = None
+    web_view_link: str | None = None
+
+
+class DriveDocumentListResponse(BaseModel):
+    items: list[DriveDocumentPublic]
+
+
 __all__ = [
     "AttachDriveBody",
     "DriveConnectionPublic",
+    "DriveDocumentListResponse",
+    "DriveDocumentPublic",
     "ImportGdocBody",
     "StartConnectResponse",
 ]

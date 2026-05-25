@@ -350,6 +350,46 @@ def google_doc_id_from_input(value: str) -> str:
     raise ValueError("not a Google Doc ID or URL")
 
 
+async def list_documents(
+    *,
+    access_token: str,
+    query: str | None = None,
+    page_size: int = 50,
+) -> list[dict[str, Any]]:
+    """List the user's Google Docs from Drive, newest-modified first.
+
+    Filters to `application/vnd.google-apps.document` so we don't surface
+    spreadsheets, slides, or random PDFs in the picker. When `query` is
+    given we apply a substring `name contains` filter — Drive's full-text
+    search is more expensive and rate-limited, so the cheaper title filter
+    is what the picker needs.
+
+    Returns a list of `{id, name, modified_time, web_view_link}` dicts.
+    """
+    q_parts = ["mimeType='application/vnd.google-apps.document'", "trashed=false"]
+    if query:
+        # Drive's `q` parser requires escaped single quotes inside literals.
+        safe = query.replace("'", "\\'")
+        q_parts.append(f"name contains '{safe}'")
+    params = {
+        "q": " and ".join(q_parts),
+        "pageSize": str(min(max(page_size, 1), 100)),
+        "fields": "files(id,name,modifiedTime,webViewLink)",
+        "orderBy": "modifiedTime desc",
+        "spaces": "drive",
+    }
+    async with httpx.AsyncClient(timeout=15) as c:
+        r = await c.get(
+            DRIVE_FILES_API,
+            params=params,
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+    if r.status_code != 200:
+        raise GoogleApiError(r.status_code, r.text)
+    payload = r.json()
+    return list(payload.get("files", []))
+
+
 async def export_doc_as_html(*, document_id: str, access_token: str) -> str:
     """Use Drive's `export` endpoint to download a Google Doc as HTML."""
     async with httpx.AsyncClient(timeout=30) as c:

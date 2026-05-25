@@ -3,9 +3,20 @@ import { apiFetchAuthed, ApiError } from "@/lib/api-client";
 import type {
   AttachDriveBody,
   DriveConnection,
+  DriveDocumentListResponse,
   ImportGdocBody,
   StartConnectResponse,
 } from "./types";
+
+export function listDriveDocuments(
+  query?: string,
+  limit = 50,
+): Promise<DriveDocumentListResponse> {
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  params.set("limit", String(limit));
+  return apiFetchAuthed<DriveDocumentListResponse>(`/drive/documents?${params}`);
+}
 
 export function startDriveConnect(): Promise<StartConnectResponse> {
   return apiFetchAuthed<StartConnectResponse>("/auth/google/drive/start", {

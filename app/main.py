@@ -116,6 +116,7 @@ def create_app() -> FastAPI:
     app.include_router(push.router)
     app.include_router(drive.auth_router)
     app.include_router(drive.projects_router)
+    app.include_router(drive.files_router)
     app.include_router(dashboard.router)
     app.include_router(notification_prefs.router)
 

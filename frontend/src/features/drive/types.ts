@@ -16,3 +16,15 @@ export interface AttachDriveBody {
 export interface ImportGdocBody {
   document: string;
 }
+
+/** One row in the Drive picker — mirror of `app/schemas/drive.py::DriveDocumentPublic`. */
+export interface DriveDocument {
+  id: string;
+  name: string;
+  modified_time: string | null;
+  web_view_link: string | null;
+}
+
+export interface DriveDocumentListResponse {
+  items: DriveDocument[];
+}
