@@ -157,6 +157,19 @@ export function RoleEditor({ department }: { department: Department }) {
   );
 }
 
+/**
+ * Slugify a free-form role name into a stable backend key. The backend
+ * regex (`app/schemas/department.py::CreateRoleBody`) is
+ * `^[a-z0-9](?:[a-z0-9_]*[a-z0-9])?$` — lowercase alphanumeric with
+ * single-character underscore separators, no leading/trailing underscore.
+ */
+function slugifyRoleKey(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
 function AddRoleDialog({
   departmentId,
   onCreated,
@@ -167,22 +180,27 @@ function AddRoleDialog({
   const t = useTranslations("departments");
   const tCommon = useTranslations("common");
   const [open, setOpen] = useState(false);
-  const [key, setKey] = useState("");
   const [nameEn, setNameEn] = useState("");
   const [nameNl, setNameNl] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    const en = nameEn.trim();
+    const nl = nameNl.trim() || en;
+    const key = slugifyRoleKey(en);
+    if (!key) {
+      toast.error(tCommon("error"));
+      return;
+    }
     setSubmitting(true);
     try {
       await createRole(departmentId, {
-        key: key.trim(),
-        name_i18n: { en: nameEn.trim(), nl: nameNl.trim() || nameEn.trim() },
+        key,
+        name_i18n: { en, nl },
       });
       toast.success(t("role_added_toast"));
       setOpen(false);
-      setKey("");
       setNameEn("");
       setNameNl("");
       onCreated();
@@ -208,23 +226,13 @@ function AddRoleDialog({
         </DialogHeader>
         <form className="space-y-4" onSubmit={submit}>
           <div className="space-y-2">
-            <Label htmlFor="role-key">{t("key_label")}</Label>
-            <Input
-              id="role-key"
-              required
-              pattern="^[a-z0-9](?:[a-z0-9_]*[a-z0-9])?$"
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              placeholder="member"
-            />
-          </div>
-          <div className="space-y-2">
             <Label htmlFor="role-name-en">{t("name_en_label")}</Label>
             <Input
               id="role-name-en"
               required
               value={nameEn}
               onChange={(e) => setNameEn(e.target.value)}
+              autoFocus
             />
           </div>
           <div className="space-y-2">
