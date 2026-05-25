@@ -148,6 +148,7 @@
     "create_failed": "Afdeling kon niet worden aangemaakt",
     "created_toast": "Afdeling aangemaakt",
     "name_label": "Naam",
+    "rename": "Hernoemen",
     "editor_title": "Afdeling",
     "editor_subtitle": "Hernoem de afdeling. Functies worden bepaald door het sjabloon.",
     "saved_toast": "Opgeslagen",

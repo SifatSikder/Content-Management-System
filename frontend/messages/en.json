@@ -148,6 +148,7 @@
     "create_failed": "Could not create department",
     "created_toast": "Department created",
     "name_label": "Name",
+    "rename": "Rename",
     "editor_title": "Department",
     "editor_subtitle": "Rename the department. Features are determined by the department template.",
     "saved_toast": "Saved",

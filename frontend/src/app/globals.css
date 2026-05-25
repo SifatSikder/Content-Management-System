@@ -3,6 +3,19 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * `data-active:` shorthand used by radix-nova primitives (tabs, accordion,
+ * select…) maps to Radix's `data-state="active"` / `data-state="open"`
+ * attribute. Without this variant Tailwind looks for a bare `data-active`
+ * attribute that Radix never sets, so every `data-active:bg-…` /
+ * `data-active:text-…` rule in the primitives silently no-ops.
+ */
+@custom-variant data-active (&[data-state="active"], &[data-state="open"]);
+@custom-variant data-open (&[data-state="open"]);
+@custom-variant data-closed (&[data-state="closed"]);
+@custom-variant data-horizontal (&[data-orientation="horizontal"]);
+@custom-variant data-vertical (&[data-orientation="vertical"]);
+
 :root {
   --radius: 0.625rem;
   --background: oklch(1 0 0);
