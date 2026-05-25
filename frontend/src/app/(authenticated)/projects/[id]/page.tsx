@@ -151,7 +151,7 @@ export default function ProjectDetailPage() {
           );
         })}
         <TabsContent value="activity" className="px-0">
-          <ActivityFeed projectId={project.id} />
+          <ActivityFeed projectId={project.id} departmentId={project.department_id} />
         </TabsContent>
       </Tabs>
     </div>

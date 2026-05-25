@@ -376,6 +376,8 @@
   "activity": {
     "feed_title": "Activity",
     "load_more": "Load more",
+    "from": "from",
+    "to": "to",
     "verb_project_created": "created the project",
     "verb_project_updated": "updated the project",
     "verb_project_stage_changed": "changed the stage",

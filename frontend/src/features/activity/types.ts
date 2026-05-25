@@ -40,6 +40,8 @@ export interface ActivityItem {
   id: string;
   project_id: string | null;
   actor_id: string | null;
+  /** NULL when the actor was deleted (spec §10 PII redaction). */
+  actor: { id: string; name: string } | null;
   action: ActivityAction | string;
   metadata_json: Record<string, unknown>;
   created_at: string;

@@ -14,9 +14,10 @@ from typing import Any
 from sqlalchemy import DateTime, ForeignKey, Index, String, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, UUIDPrimaryKeyMixin
+from app.models.user import UserModel
 
 
 class ActivityModel(UUIDPrimaryKeyMixin, Base):
@@ -35,6 +36,12 @@ class ActivityModel(UUIDPrimaryKeyMixin, Base):
         PG_UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
+    )
+    # Eager-loaded so the activity feed can render the actor's display name
+    # without a follow-up query per row. NULL when the actor was deleted
+    # (spec §10 PII redaction).
+    actor: Mapped[UserModel | None] = relationship(
+        UserModel, foreign_keys=[actor_id], lazy="selectin"
     )
     # Verb-style action key, e.g. "project.created", "script.locked",
     # "edit.uploaded", "edit.approved". Resolved to localised copy in the UI.

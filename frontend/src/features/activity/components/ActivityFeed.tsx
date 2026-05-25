@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { listProjectActivity } from "@/features/activity/api";
 import { actionMessageKey, type ActivityItem } from "@/features/activity/types";
+import { useStageLabel } from "@/features/departments/hooks/useStageLabel";
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString();
@@ -14,11 +15,19 @@ function formatDateTime(iso: string): string {
 
 interface Props {
   projectId: string;
+  /**
+   * Department id for the project. Used by `useStageLabel` to render
+   * stage-key metadata (e.g. `from: "idea", to: "script_drafting"` on
+   * `project.stage_changed` rows) as the localized stage names ("Idea"
+   * → "Script drafting") instead of raw keys.
+   */
+  departmentId?: string;
 }
 
-export function ActivityFeed({ projectId }: Props) {
+export function ActivityFeed({ projectId, departmentId }: Props) {
   const t = useTranslations("activity");
   const tCommon = useTranslations("common");
+  const stageLabel = useStageLabel(departmentId);
   const [items, setItems] = useState<ActivityItem[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "loading_more" | "error">(
@@ -91,13 +100,44 @@ export function ActivityFeed({ projectId }: Props) {
               return item.action;
             }
           })();
+          // For stage transitions, render "from {Stage A} to {Stage B}" via
+          // useStageLabel. Both `from` and `to` in metadata are stage *keys*
+          // (e.g. "idea") — useStageLabel resolves them to localized names.
+          const transition = (() => {
+            if (item.action !== "project.stage_changed") return null;
+            const meta = item.metadata_json as { from?: string; to?: string };
+            if (!meta.from && !meta.to) return null;
+            return {
+              from: meta.from ? stageLabel(meta.from) : null,
+              to: meta.to ? stageLabel(meta.to) : null,
+            };
+          })();
+          const actorName = item.actor?.name ?? "system";
           return (
             <li key={item.id} className="flex flex-col gap-1 px-4 py-3 text-sm">
               <span>
-                <span className="font-medium">
-                  {item.actor_id ? item.actor_id.slice(0, 8) : "system"}
-                </span>{" "}
-                <span className="text-muted-foreground">{verb}</span>
+                <span className="font-medium">{actorName}</span>{" "}
+                <span className="text-muted-foreground">
+                  {verb}
+                  {transition && (
+                    <>
+                      {transition.from && (
+                        <>
+                          {" "}
+                          {t("from")}{" "}
+                          <span className="text-foreground">{transition.from}</span>
+                        </>
+                      )}
+                      {transition.to && (
+                        <>
+                          {" "}
+                          {t("to")}{" "}
+                          <span className="text-foreground">{transition.to}</span>
+                        </>
+                      )}
+                    </>
+                  )}
+                </span>
               </span>
               <span className="text-muted-foreground text-xs">
                 {formatDateTime(item.created_at)}

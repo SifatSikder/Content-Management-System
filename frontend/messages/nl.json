@@ -376,6 +376,8 @@
   "activity": {
     "feed_title": "Activiteit",
     "load_more": "Meer laden",
+    "from": "van",
+    "to": "naar",
     "verb_project_created": "heeft het project aangemaakt",
     "verb_project_updated": "heeft het project bijgewerkt",
     "verb_project_stage_changed": "heeft de fase gewijzigd",
