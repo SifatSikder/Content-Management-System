@@ -39,7 +39,7 @@ async def get_memberships(
         session, department_id=department_id
     )
     return DepartmentMembershipListResponse(
-        items=[DepartmentMembershipPublic.model_validate(r) for r in rows]
+        items=[DepartmentMembershipPublic.from_orm_row(r) for r in rows]
     )
 
 
@@ -69,11 +69,19 @@ async def post_membership(
         user_id=body.user_id,
         role_id=body.role_id,
     )
+    # Validate-before-commit: post-commit the row's columns are expired
+    # and lazy-loading them mid-serialisation raises MissingGreenlet.
+    # `user`, `role`, and `business_membership` are all eager-loaded
+    # inside `assign_department_member` (via `_ensure_business_membership`
+    # + the in-memory relationship attachment in the create path); the
+    # update path re-uses an already-loaded row.
+    await session.refresh(
+        membership,
+        attribute_names=["user", "role", "business_membership"],
+    )
+    response = DepartmentMembershipPublic.from_orm_row(membership)
     await session.commit()
-    # `lazy="raise"` on the user/role relations means a vanilla refresh
-    # would explode when serialisation walks them. Load them explicitly.
-    await session.refresh(membership, attribute_names=["user", "role"])
-    return DepartmentMembershipPublic.model_validate(membership)
+    return response
 
 
 @router.delete(

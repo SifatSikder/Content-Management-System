@@ -37,3 +37,23 @@ export function deleteBusiness(id: string): Promise<void> {
 export function listMyBusinesses(): Promise<MeBusinessesResponse> {
   return apiFetchAuthed<MeBusinessesResponse>("/me/businesses");
 }
+
+/**
+ * Soft-toggle a business membership between active and revoked. Used by
+ * the dept members table's Make active / Make inactive actions — keeps
+ * the row + the user's department-level role assignments intact while
+ * blocking them at the business gate.
+ */
+export function setBusinessMembershipStatus(
+  businessId: string,
+  membershipId: string,
+  status: "active" | "revoked",
+): Promise<unknown> {
+  return apiFetchAuthed(
+    `/businesses/${businessId}/memberships/${membershipId}`,
+    {
+      method: "PATCH",
+      body: { status } as unknown as BodyInit,
+    },
+  );
+}

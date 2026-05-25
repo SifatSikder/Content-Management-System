@@ -246,10 +246,54 @@ async def revoke_membership(
     await session.flush()
 
 
+async def set_business_membership_status(
+    session: AsyncSession,
+    *,
+    business_id: uuid.UUID,
+    membership_id: uuid.UUID,
+    status: BusinessMembershipStatus,
+) -> BusinessMembershipModel:
+    """Flip a business membership's status (soft enable/disable).
+
+    Unlike `revoke_membership` (which deletes the row), this preserves the
+    membership row and just toggles `status` between ACTIVE and REVOKED.
+    The middleware's `_user_is_active_member` only lets ACTIVE through, so
+    a REVOKED user is blocked from the business without losing their
+    department role assignments or history.
+    """
+    from sqlalchemy.orm import selectinload
+
+    result = await session.execute(
+        select(BusinessMembershipModel)
+        .options(selectinload(BusinessMembershipModel.user))
+        .where(
+            BusinessMembershipModel.id == membership_id,
+            BusinessMembershipModel.business_id == business_id,
+        )
+    )
+    membership = result.scalar_one_or_none()
+    if membership is None:
+        raise BusinessNotFoundError(f"membership {membership_id}")
+    if membership.user.is_super_admin and status != BusinessMembershipStatus.ACTIVE:
+        raise CannotRevokeCeoError(str(membership.user_id))
+    membership.status = status
+    if status == BusinessMembershipStatus.ACTIVE and membership.joined_at is None:
+        membership.joined_at = datetime.now(UTC)
+    await session.flush()
+    # `TimestampMixin.updated_at` carries a server-side `onupdate=NOW()`.
+    # SQLAlchemy can't know the DB-written value so it expires the
+    # attribute post-flush; the next attribute access (Pydantic
+    # serialisation) would lazy-load and raise MissingGreenlet inside
+    # the async response cycle. Refresh just that column to pre-load it.
+    await session.refresh(membership, attribute_names=["updated_at"])
+    return membership
+
+
 __all__ = [
     "BusinessNotFoundError",
     "CannotRevokeCeoError",
     "MembershipAlreadyExistsError",
+    "set_business_membership_status",
     "SlugTakenError",
     "UserNotFoundError",
     "create_business",

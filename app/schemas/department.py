@@ -8,6 +8,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from app.models.enums import BusinessMembershipStatus
 from app.schemas.auth import UserPublic
 
 # --- Templates -----------------------------------------------------------
@@ -199,8 +200,40 @@ class DepartmentMembershipPublic(BaseModel):
     role_id: uuid.UUID
     user: UserPublic
     role: RolePublic
+    # Joined off the matching `business_memberships` row — needed so the
+    # FE can render an Active/Inactive/Pending badge and address the row
+    # via the PATCH endpoint without a second round-trip.
+    business_membership_id: uuid.UUID | None = None
+    business_membership_status: BusinessMembershipStatus | None = None
     created_at: datetime
     updated_at: datetime
+
+    @classmethod
+    def from_orm_row(cls, row: object) -> "DepartmentMembershipPublic":
+        """Construct from a `DepartmentMembershipModel` with its
+        `business_membership` relation eagerloaded.
+
+        Pydantic's `from_attributes` can't reach into `row.business_membership.id`
+        / `.status` directly because they're properties on the related
+        ORM object; we hoist them explicitly here.
+        """
+        bm = getattr(row, "business_membership", None)
+        return cls.model_validate(
+            {
+                "id": row.id,
+                "department_id": row.department_id,
+                "business_id": row.business_id,
+                "user_id": row.user_id,
+                "role_id": row.role_id,
+                "user": row.user,
+                "role": row.role,
+                "business_membership_id": bm.id if bm is not None else None,
+                "business_membership_status": bm.status if bm is not None else None,
+                "created_at": row.created_at,
+                "updated_at": row.updated_at,
+            },
+            from_attributes=True,
+        )
 
 
 class InviteDepartmentMemberBody(BaseModel):

@@ -17,7 +17,11 @@
  */
 
 import { cookies } from "next/headers";
-import NextAuth, { type DefaultSession, type NextAuthConfig } from "next-auth";
+import NextAuth, {
+  CredentialsSignin,
+  type DefaultSession,
+  type NextAuthConfig,
+} from "next-auth";
 import type { Provider } from "next-auth/providers";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
@@ -25,7 +29,12 @@ import { SignJWT, jwtVerify } from "jose";
 
 import { type Role } from "@/features/auth/constants";
 import { verifyPassword } from "@/server/password";
-import { getActiveUserByEmail, setAvatarUrl, touchLastLogin } from "@/server/users";
+import {
+  getActiveUserByEmail,
+  setAvatarUrl,
+  touchLastLogin,
+  userHasActiveAccess,
+} from "@/server/users";
 
 // 1 hour — matches Settings.jwt_ttl_seconds on the backend.
 const JWT_TTL_SECONDS = 3600;
@@ -35,6 +44,17 @@ const JWT_TTL_SECONDS = 3600;
 // either way — closes the email-enumeration timing oracle.
 const DUMMY_PASSWORD_HASH =
   "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW";
+
+/**
+ * Surfaced when a user authenticates correctly but is currently denied
+ * access (all their business memberships are revoked, or they're soft-
+ * disabled). The custom `code` flows through `signIn(..., { redirect: false })`
+ * as `result.code` so the login page can route them to `/access-denied`
+ * instead of showing a generic "invalid credentials" toast.
+ */
+class AccessRevokedError extends CredentialsSignin {
+  code = "access_revoked";
+}
 
 // Augment NextAuth types so callers see role + must_change_password +
 // is_super_admin + accessToken.
@@ -85,6 +105,15 @@ function buildProviders(): Provider[] {
         const hashToCheck = user?.password_hash ?? DUMMY_PASSWORD_HASH;
         const ok = await verifyPassword(password, hashToCheck);
         if (!user || !user.password_hash || !user.accepted_at || !ok) return null;
+
+        // Block users whose every business membership is revoked (CEO
+        // super-admin bypasses). Throwing `AccessRevokedError` (rather
+        // than returning null) propagates the distinct `code` to the
+        // client so it can route to `/access-denied` instead of showing
+        // the generic invalid-credentials toast.
+        if (!(await userHasActiveAccess(user.id, user.role))) {
+          throw new AccessRevokedError();
+        }
 
         await touchLastLogin(user.id);
         return {
@@ -139,7 +168,7 @@ const config: NextAuthConfig = {
   session: { strategy: "jwt", maxAge: JWT_TTL_SECONDS },
   secret: authSecret(),
   trustHost: true,
-  pages: { signIn: "/", error: "/" },
+  pages: { signIn: "/", error: "/access-denied" },
   providers: buildProviders(),
   // Override NextAuth's default JWE encoding with plain JWS HS256 so the
   // cookie payload is the same shape FastAPI expects (sub/email/role/iat/exp).
@@ -182,6 +211,9 @@ const config: NextAuthConfig = {
       if (!user.email) return false;
       const known = await getActiveUserByEmail(user.email);
       if (!known?.accepted_at) return false;
+      // Same active-access gate as Credentials — Google sign-in must not
+      // be a side door around the inactive-member block.
+      if (!(await userHasActiveAccess(known.id, known.role))) return false;
       // Hand the role + must_change_password back to the jwt callback by
       // assigning to the `user` parameter. NextAuth threads it through.
       (user as { role?: Role; must_change_password?: boolean }).role = known.role;

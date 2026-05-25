@@ -503,6 +503,7 @@ async def list_department_memberships(
         .options(
             selectinload(DepartmentMembershipModel.user),
             selectinload(DepartmentMembershipModel.role),
+            selectinload(DepartmentMembershipModel.business_membership),
         )
         .where(DepartmentMembershipModel.department_id == department_id)
         .order_by(DepartmentMembershipModel.created_at.asc())
@@ -520,8 +521,13 @@ async def _ensure_business_membership(
 
     Business memberships are auto-managed off department memberships: as
     soon as a user is assigned to any department in a business, they get
-    the business-level row. If one already exists in any non-revoked state
-    we leave it alone. A previously-revoked row is reactivated.
+    the business-level row.
+
+    A previously-revoked row is **not** auto-flipped back to active —
+    re-activation is an explicit admin action (PATCH on the business
+    membership). Adding a revoked user to a new department writes the
+    department-membership row but keeps them blocked at the business
+    gate until someone toggles them back to Active.
     """
     existing_q = await session.execute(
         select(BusinessMembershipModel).where(
@@ -539,11 +545,6 @@ async def _ensure_business_membership(
                 joined_at=datetime.now(UTC),
             )
         )
-        await session.flush()
-        return
-    if existing.status != BusinessMembershipStatus.ACTIVE:
-        existing.status = BusinessMembershipStatus.ACTIVE
-        existing.joined_at = existing.joined_at or datetime.now(UTC)
         await session.flush()
 
 

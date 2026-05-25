@@ -25,7 +25,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
-const PUBLIC_PATHS = ["/", "/accept-invite", "/reset-password"];
+const PUBLIC_PATHS = ["/", "/accept-invite", "/reset-password", "/access-denied"];
 const CHANGE_PASSWORD_PATH = "/change-password";
 // Post-login lands on the business list — the multi-business flow starts
 // there: pick a business → its kanban opens. Going straight to /projects

@@ -62,6 +62,14 @@ export default function HomePage() {
         password: values.password,
         redirect: false,
       });
+      // An inactive user (correct password, revoked business membership)
+      // gets a distinct `code` from `AccessRevokedError` thrown in
+      // `authorize()`. Route them to /access-denied instead of the
+      // generic invalid-credentials toast.
+      if (result && (result as { code?: string }).code === "access_revoked") {
+        router.push("/access-denied");
+        return;
+      }
       if (!result || result.error) {
         toast.error(tAuth("invalid_credentials"));
         return;

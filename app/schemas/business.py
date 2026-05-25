@@ -70,6 +70,18 @@ class BusinessMembershipListResponse(BaseModel):
     items: list[BusinessMembershipPublic]
 
 
+class UpdateBusinessMembershipBody(BaseModel):
+    """Body for `PATCH /businesses/{id}/memberships/{id}`.
+
+    Flips a member between active (full access) and revoked (soft-disabled
+    — kept in the DB with all role assignments intact, but blocked from
+    accessing the business). The `invited` status is reserved for legacy
+    rows and not accepted as an input here.
+    """
+
+    status: BusinessMembershipStatus
+
+
 class MeBusinessEntry(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -94,4 +106,5 @@ __all__ = [
     "MeBusinessEntry",
     "MeBusinessesResponse",
     "UpdateBusinessBody",
+    "UpdateBusinessMembershipBody",
 ]

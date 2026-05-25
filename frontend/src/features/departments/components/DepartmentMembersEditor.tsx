@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2, UserPlus } from "lucide-react";
+import { MoreHorizontal, UserPlus } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -14,7 +14,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +34,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -53,7 +59,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { setBusinessMembershipStatus } from "@/features/businesses/api";
 import {
+  changeDepartmentMemberRole,
   inviteDepartmentMember,
   listDepartmentMembers,
   listRoles,
@@ -96,6 +104,16 @@ export function DepartmentMembersEditor({ departmentId }: { departmentId: string
   const [members, setMembers] = useState<DepartmentMembership[]>([]);
   const [roles, setRoles] = useState<DepartmentRole[]>([]);
   const [loading, setLoading] = useState(true);
+  // Track which member's row-level dialog is currently open. Only one
+  // change-role / remove-confirm dialog can be open at a time, and the
+  // DropdownMenu closes before its child Dialog mounts (Radix focus
+  // management), so we hold the target in component state.
+  const [roleDialogFor, setRoleDialogFor] = useState<DepartmentMembership | null>(
+    null,
+  );
+  const [removeDialogFor, setRemoveDialogFor] = useState<DepartmentMembership | null>(
+    null,
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -116,6 +134,39 @@ export function DepartmentMembersEditor({ departmentId }: { departmentId: string
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function removeMember(m: DepartmentMembership) {
+    try {
+      await removeDepartmentMember(departmentId, m.id);
+      toast.success(t("member_removed_toast"));
+      await load();
+    } catch (exc) {
+      const msg = exc instanceof ApiError ? exc.message : tCommon("error");
+      toast.error(msg);
+    }
+  }
+
+  async function setStatus(
+    m: DepartmentMembership,
+    status: "active" | "revoked",
+  ) {
+    if (!m.business_membership_id) {
+      toast.error(tCommon("error"));
+      return;
+    }
+    try {
+      await setBusinessMembershipStatus(m.business_id, m.business_membership_id, status);
+      toast.success(
+        status === "active"
+          ? t("member_activated_toast")
+          : t("member_deactivated_toast"),
+      );
+      await load();
+    } catch (exc) {
+      const msg = exc instanceof ApiError ? exc.message : tCommon("error");
+      toast.error(msg);
+    }
+  }
 
   return (
     <Card>
@@ -141,6 +192,7 @@ export function DepartmentMembersEditor({ departmentId }: { departmentId: string
               <TableRow>
                 <TableHead>{t("member")}</TableHead>
                 <TableHead>{t("role")}</TableHead>
+                <TableHead>{t("status")}</TableHead>
                 <TableHead className="w-12" />
               </TableRow>
             </TableHeader>
@@ -171,44 +223,61 @@ export function DepartmentMembersEditor({ departmentId }: { departmentId: string
                       <Badge variant="outline">{roleLabel(m.role)}</Badge>
                     </TableCell>
                     <TableCell>
+                      {m.user.is_pending ? (
+                        <Badge variant="secondary">{t("status_pending")}</Badge>
+                      ) : m.business_membership_status === "revoked" ? (
+                        <Badge variant="outline">{t("status_inactive")}</Badge>
+                      ) : (
+                        <Badge>{t("status_active")}</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       {isCeo ? null : (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <Trash2 className="size-4" />
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={t("member_actions")}
+                            >
+                              <MoreHorizontal className="size-4" />
                             </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>
-                                {t("remove_member_title")}
-                              </AlertDialogTitle>
-                              <AlertDialogDescription>
-                                {t("remove_member_confirm", { name: m.user.name })}
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={async () => {
-                                  try {
-                                    await removeDepartmentMember(departmentId, m.id);
-                                    toast.success(t("member_removed_toast"));
-                                    await load();
-                                  } catch (exc) {
-                                    const msg =
-                                      exc instanceof ApiError
-                                        ? exc.message
-                                        : tCommon("error");
-                                    toast.error(msg);
-                                  }
-                                }}
-                              >
-                                {t("remove_member_action")}
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onSelect={() => setRoleDialogFor(m)}
+                            >
+                              {t("change_role")}
+                            </DropdownMenuItem>
+                            {/* Soft enable/disable only for accepted users
+                                (a Pending user is in a pre-accept state, no
+                                point flipping their business membership). */}
+                            {!m.user.is_pending ? (
+                              m.business_membership_status === "revoked" ? (
+                                <DropdownMenuItem
+                                  onSelect={() => void setStatus(m, "active")}
+                                >
+                                  {t("make_active")}
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  onSelect={() => void setStatus(m, "revoked")}
+                                >
+                                  {t("make_inactive")}
+                                </DropdownMenuItem>
+                              )
+                            ) : null}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              variant="destructive"
+                              onSelect={() => setRemoveDialogFor(m)}
+                            >
+                              {m.user.is_pending
+                                ? t("cancel_invitation_action")
+                                : t("remove_member_action")}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       )}
                     </TableCell>
                   </TableRow>
@@ -217,8 +286,155 @@ export function DepartmentMembersEditor({ departmentId }: { departmentId: string
             </TableBody>
           </Table>
         )}
+
+        {/* Change role dialog — driven by `roleDialogFor` state. */}
+        <ChangeRoleDialog
+          membership={roleDialogFor}
+          roles={roles}
+          departmentId={departmentId}
+          onClose={() => setRoleDialogFor(null)}
+          onChanged={() => {
+            setRoleDialogFor(null);
+            void load();
+          }}
+        />
+
+        {/* Remove / cancel-invitation confirmation. */}
+        <AlertDialog
+          open={removeDialogFor !== null}
+          onOpenChange={(open) => {
+            if (!open) setRemoveDialogFor(null);
+          }}
+        >
+          <AlertDialogContent>
+            {removeDialogFor ? (
+              <>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    {removeDialogFor.user.is_pending
+                      ? t("cancel_invitation_title")
+                      : t("remove_member_title")}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {removeDialogFor.user.is_pending
+                      ? t("cancel_invitation_confirm", {
+                          name: removeDialogFor.user.name,
+                        })
+                      : t("remove_member_confirm", {
+                          name: removeDialogFor.user.name,
+                        })}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={async () => {
+                      const m = removeDialogFor;
+                      setRemoveDialogFor(null);
+                      await removeMember(m);
+                    }}
+                  >
+                    {removeDialogFor.user.is_pending
+                      ? t("cancel_invitation_action")
+                      : t("remove_member_action")}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </>
+            ) : null}
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
+  );
+}
+
+function ChangeRoleDialog({
+  membership,
+  roles,
+  departmentId,
+  onClose,
+  onChanged,
+}: {
+  membership: DepartmentMembership | null;
+  roles: DepartmentRole[];
+  departmentId: string;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const t = useTranslations("departments");
+  const tCommon = useTranslations("common");
+  const [roleId, setRoleId] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+
+  // Reset the picker to the member's current role each time the dialog
+  // opens for a different membership.
+  useEffect(() => {
+    if (membership) setRoleId(membership.role_id);
+  }, [membership]);
+
+  async function save() {
+    if (!membership || !roleId || roleId === membership.role_id) {
+      onClose();
+      return;
+    }
+    setSaving(true);
+    try {
+      await changeDepartmentMemberRole(departmentId, membership.user_id, roleId);
+      toast.success(t("role_changed_toast"));
+      onChanged();
+    } catch (exc) {
+      const msg = exc instanceof ApiError ? exc.message : tCommon("error");
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open={membership !== null}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t("change_role_title")}</DialogTitle>
+          <DialogDescription>
+            {membership
+              ? t("change_role_subtitle", { name: membership.user.name })
+              : null}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 py-2">
+          <Label>{t("role_label")}</Label>
+          <Select value={roleId} onValueChange={setRoleId}>
+            <SelectTrigger>
+              <SelectValue placeholder={t("role_placeholder")} />
+            </SelectTrigger>
+            <SelectContent>
+              {roles.map((r) => (
+                <SelectItem key={r.id} value={r.id}>
+                  {roleLabel(r)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={onClose}>
+            {tCommon("cancel")}
+          </Button>
+          <Button
+            type="button"
+            onClick={() => void save()}
+            disabled={saving || !roleId}
+          >
+            {saving ? tCommon("loading") : tCommon("save")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

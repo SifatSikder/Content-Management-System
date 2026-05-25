@@ -180,6 +180,26 @@ export function removeDepartmentMember(
   );
 }
 
+/**
+ * Update an existing member's role within a department. The backend
+ * `assign_department_member` service is upsert-shaped: posting the same
+ * user_id with a new role_id updates the role on the existing row instead
+ * of creating a duplicate.
+ */
+export function changeDepartmentMemberRole(
+  departmentId: string,
+  userId: string,
+  roleId: string,
+): Promise<DepartmentMembership> {
+  return apiFetchAuthed<DepartmentMembership>(
+    `/departments/${departmentId}/memberships`,
+    {
+      method: "POST",
+      body: { user_id: userId, role_id: roleId } as unknown as BodyInit,
+    },
+  );
+}
+
 // --- Me ------------------------------------------------------------------
 
 export function listMyDepartments(

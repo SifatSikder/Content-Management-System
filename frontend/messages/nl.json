@@ -190,6 +190,22 @@
     "remove_member_confirm": "{name} uit deze afdeling verwijderen? Ze verliezen toegang tot de projecten. Als dit hun laatste afdeling in het bedrijf is, wordt ook hun bedrijfslidmaatschap ingetrokken.",
     "remove_member_action": "Verwijderen",
     "member_removed_toast": "Lid verwijderd",
+    "status": "Status",
+    "status_pending": "In afwachting",
+    "status_active": "Actief",
+    "status_inactive": "Inactief",
+    "make_active": "Activeren",
+    "make_inactive": "Deactiveren",
+    "member_activated_toast": "Lid geactiveerd",
+    "member_deactivated_toast": "Lid gedeactiveerd",
+    "member_actions": "Acties",
+    "change_role": "Rol wijzigen",
+    "change_role_title": "Rol wijzigen",
+    "change_role_subtitle": "Kies een nieuwe rol voor {name} in deze afdeling.",
+    "role_changed_toast": "Rol bijgewerkt",
+    "cancel_invitation_title": "Uitnodiging annuleren",
+    "cancel_invitation_confirm": "De uitnodiging voor {name} annuleren? De uitnodigingslink werkt niet meer en ze worden uit deze afdeling verwijderd.",
+    "cancel_invitation_action": "Uitnodiging annuleren",
     "key_label": "Key",
     "name_en_label": "Naam (Engels)",
     "name_nl_label": "Naam (Nederlands)",
@@ -542,5 +558,11 @@
     "not_found": "Niet gevonden",
     "rate_limited": "Te veel pogingen. Wacht even.",
     "validation": "Controleer de ingevulde velden"
+  },
+  "access_denied": {
+    "title": "Geen toegang",
+    "subtitle": "Dit account kan nu niet inloggen.",
+    "body": "Denk je dat dit een fout is? Vraag de beheerder van je bedrijf om je toegang weer te activeren.",
+    "back_to_sign_in": "Terug naar inloggen"
   }
 }

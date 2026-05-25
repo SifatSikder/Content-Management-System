@@ -20,6 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
+    from app.models.business_membership import BusinessMembershipModel
     from app.models.department_role import DepartmentRoleModel
     from app.models.user import UserModel
 
@@ -58,11 +59,29 @@ class DepartmentMembershipModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     # `lazy="raise"` keeps callers honest — `list_department_memberships`
-    # selectinloads both relations; anything that forgets explodes loudly
-    # instead of silently issuing N+1 queries.
+    # selectinloads all three relations; anything that forgets explodes
+    # loudly instead of silently issuing N+1 queries.
     user: Mapped[UserModel] = relationship("UserModel", lazy="raise")
     role: Mapped[DepartmentRoleModel] = relationship(
         "DepartmentRoleModel", lazy="raise"
+    )
+    # The matching business_membership row — keyed off (business_id,
+    # user_id) which match a uniqueness constraint on the business side.
+    # `viewonly=True` because this is read-only join state; writes go
+    # through `BusinessMembershipModel` directly. SQLAlchemy needs the
+    # explicit primaryjoin + foreign_keys here because the composite
+    # match isn't expressible as a single FK.
+    business_membership: Mapped[BusinessMembershipModel] = relationship(
+        "BusinessMembershipModel",
+        primaryjoin=(
+            "and_("
+            "foreign(DepartmentMembershipModel.business_id) == BusinessMembershipModel.business_id,"
+            " foreign(DepartmentMembershipModel.user_id) == BusinessMembershipModel.user_id"
+            ")"
+        ),
+        viewonly=True,
+        uselist=False,
+        lazy="raise",
     )
 
 

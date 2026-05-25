@@ -120,7 +120,11 @@ export interface DepartmentMembershipUser {
   name: string;
   role: string;
   avatar_url: string | null;
+  is_pending: boolean;
 }
+
+/** Status on the matching business_memberships row. */
+export type BusinessMembershipStatus = "active" | "invited" | "revoked";
 
 export interface DepartmentMembership {
   id: string;
@@ -130,6 +134,8 @@ export interface DepartmentMembership {
   role_id: string;
   user: DepartmentMembershipUser;
   role: DepartmentRole;
+  business_membership_id: string | null;
+  business_membership_status: BusinessMembershipStatus | null;
   created_at: string;
   updated_at: string;
 }

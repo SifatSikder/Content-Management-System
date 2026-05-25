@@ -190,6 +190,22 @@
     "remove_member_confirm": "Remove {name} from this department? They lose access to its projects. If this is their last department in the business, their business membership is revoked too.",
     "remove_member_action": "Remove",
     "member_removed_toast": "Member removed",
+    "status": "Status",
+    "status_pending": "Pending",
+    "status_active": "Active",
+    "status_inactive": "Inactive",
+    "make_active": "Make active",
+    "make_inactive": "Make inactive",
+    "member_activated_toast": "Member activated",
+    "member_deactivated_toast": "Member deactivated",
+    "member_actions": "Member actions",
+    "change_role": "Change role",
+    "change_role_title": "Change role",
+    "change_role_subtitle": "Pick a new role for {name} in this department.",
+    "role_changed_toast": "Role updated",
+    "cancel_invitation_title": "Cancel invitation",
+    "cancel_invitation_confirm": "Cancel {name}'s invitation? The invite link stops working and they're removed from this department.",
+    "cancel_invitation_action": "Cancel invitation",
     "key_label": "Key",
     "name_en_label": "Name (English)",
     "name_nl_label": "Name (Dutch)",
@@ -542,5 +558,11 @@
     "not_found": "Not found",
     "rate_limited": "Too many attempts. Please wait.",
     "validation": "Please check the form fields"
+  },
+  "access_denied": {
+    "title": "You're not authorized",
+    "subtitle": "This account can't sign in right now.",
+    "body": "If you think this is a mistake, ask the admin who manages your business to reactivate your access.",
+    "back_to_sign_in": "Back to sign in"
   }
 }

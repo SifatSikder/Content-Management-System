@@ -23,6 +23,7 @@ from app.schemas.business import (
     BusinessMembershipListResponse,
     BusinessMembershipPublic,
     InviteBusinessMemberBody,
+    UpdateBusinessMembershipBody,
 )
 from app.services import business_service
 
@@ -73,12 +74,53 @@ async def post_membership(
             status.HTTP_409_CONFLICT,
             "User is already a member of this business",
         ) from exc
+    # Validate-before-commit: post-commit the row's columns are expired
+    # and lazy-loading them mid-serialisation raises MissingGreenlet.
+    # `user` is already eager-loaded inside the service.
+    response = BusinessMembershipPublic.model_validate(membership)
     await session.commit()
-    # `lazy="raise"` on BusinessMembershipModel.user means the default
-    # refresh would explode when serialisation accesses `.user`. Include
-    # the relation in the refresh so the response carries the joined user.
-    await session.refresh(membership, attribute_names=["user"])
-    return BusinessMembershipPublic.model_validate(membership)
+    return response
+
+
+@router.patch(
+    "/{business_id}/memberships/{membership_id}",
+    response_model=BusinessMembershipPublic,
+    summary="Toggle a business membership between active and revoked (soft-disable)",
+)
+async def patch_membership(
+    business_id: uuid.UUID,
+    membership_id: uuid.UUID,
+    body: UpdateBusinessMembershipBody,
+    user: CurrentUser,
+    session: SessionDep,
+    _: Annotated[BusinessModel, Depends(require_business_admin)],
+) -> BusinessMembershipPublic:
+    """Flip a member between active (full access) and inactive (revoked,
+    blocked at the business gate but with department roles preserved).
+
+    The CEO row can't be set to anything other than ACTIVE — flipping
+    them off would orphan the platform.
+    """
+    try:
+        membership = await business_service.set_business_membership_status(
+            session,
+            business_id=business_id,
+            membership_id=membership_id,
+            status=body.status,
+        )
+    except business_service.BusinessNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Membership not found") from exc
+    except business_service.CannotRevokeCeoError as exc:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "The CEO's membership cannot be revoked"
+        ) from exc
+    # Construct the response BEFORE commit. After commit the session
+    # expires all attributes; a subsequent refresh with `attribute_names`
+    # only reloads the named ones, leaving the rest in lazy-IO state —
+    # which raises MissingGreenlet inside the async serialiser.
+    response = BusinessMembershipPublic.model_validate(membership)
+    await session.commit()
+    return response
 
 
 @router.delete(

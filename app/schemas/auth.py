@@ -26,6 +26,11 @@ class UserPublic(BaseModel):
     role: Role
     locale: str
     avatar_url: str | None = None
+    # Derived from `UserModel.is_pending` (a property returning
+    # `accepted_at is None`). Surfaces true while the user is
+    # invited-but-not-yet-accepted so the frontend can render a Pending
+    # badge in the dept members table.
+    is_pending: bool = False
 
 
 __all__ = ["UserPublic"]

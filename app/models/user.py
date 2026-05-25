@@ -77,5 +77,15 @@ class UserModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         """
         return self.role == Role.CEO
 
+    @property
+    def is_pending(self) -> bool:
+        """True iff the user has been invited but hasn't accepted yet.
+
+        Picked up by `UserPublic` (Pydantic `from_attributes=True`) so the
+        dept members table can render a Pending badge without a second
+        round-trip.
+        """
+        return self.accepted_at is None
+
 
 __all__ = ["UserModel"]

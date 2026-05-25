@@ -133,6 +133,30 @@ export async function softDeleteUser(id: string): Promise<void> {
   await getPool().query(`UPDATE users SET deleted_at = now() WHERE id = $1`, [id]);
 }
 
+/**
+ * True iff the user is allowed to sign in.
+ *
+ * The CEO super-admin (`role = 'ceo'`) is always allowed — they bypass
+ * business membership and are the platform owner. Everyone else needs at
+ * least one `business_memberships` row with `status = 'active'`. A user
+ * whose memberships are all revoked is blocked at the auth layer rather
+ * than letting them in to see an empty businesses list.
+ */
+export async function userHasActiveAccess(
+  userId: string,
+  role: string,
+): Promise<boolean> {
+  if (role === "ceo") return true;
+  const result = await getPool().query<{ exists: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM business_memberships
+        WHERE user_id = $1 AND status = 'active'
+     ) AS exists`,
+    [userId],
+  );
+  return result.rows[0]?.exists === true;
+}
+
 export async function listAllUsers(): Promise<UserAdminView[]> {
   const result = await getPool().query(
     `SELECT id, email, name, role, locale, password_hash, must_change_password,
