@@ -12,11 +12,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import type { Role } from "@/features/auth/constants";
 import { useDepartmentStages } from "@/features/departments/hooks/useDepartmentStages";
+import { useTerminology } from "@/features/departments/hooks/useTerminology";
+import type { Terminology } from "@/features/departments/types";
+import { useCanIDo } from "@/features/permissions/hooks/usePermissions";
 import { CreateProjectDialog } from "@/features/projects/components/CreateProjectDialog";
 import type { Project } from "@/features/projects/types";
-import type { Role } from "@/lib/enums";
-import { CREATOR_ROLES } from "@/lib/enums";
 
 interface Props {
   role: Role;
@@ -28,21 +30,31 @@ interface Props {
   onCreated: (p: Project) => void;
   /** Department whose stages drive the dropdown + new-project default. */
   departmentId: string;
+  /**
+   * Department's terminology JSONB. When the template carries an override
+   * (Marketing has `create_project = "New lead"`), the create button label
+   * picks that up; otherwise it falls back to `projects.create`.
+   */
+  terminology?: Terminology;
 }
 
 export function FilterBar({
-  role,
+  role: _role,
   mine,
   setMine,
   stage,
   setStage,
   onCreated,
   departmentId,
+  terminology,
 }: Props) {
   const tProj = useTranslations("projects");
   const tCommon = useTranslations("common");
   const locale = useLocale();
+  const noun = useTerminology(terminology);
   const { stages } = useDepartmentStages(departmentId);
+  // Hidden until the permission map loads; same tradeoff as ScriptTab.
+  const canCreate = useCanIDo(departmentId, "project.create");
 
   function stageLabel(s: { name_i18n: Record<string, string>; key: string }): string {
     return s.name_i18n[locale] ?? s.name_i18n.en ?? s.name_i18n.nl ?? s.key;
@@ -75,11 +87,13 @@ export function FilterBar({
       </div>
 
       <div className="ml-auto">
-        {CREATOR_ROLES.has(role) && (
+        {canCreate && (
           <CreateProjectDialog
             onCreated={onCreated}
             departmentId={departmentId}
-            trigger={<Button size="sm">{tProj("create")}</Button>}
+            trigger={
+              <Button size="sm">{noun("create_project", tProj("create"))}</Button>
+            }
           />
         )}
       </div>

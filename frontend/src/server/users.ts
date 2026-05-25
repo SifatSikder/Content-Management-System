@@ -13,7 +13,7 @@
  * the frontend can reuse the existing `Role` enum.
  */
 
-import type { Role } from "@/lib/enums";
+import { type Role } from "@/features/auth/constants";
 
 import { getPool, withTransaction } from "./db";
 

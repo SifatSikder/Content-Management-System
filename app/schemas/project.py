@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -36,9 +37,11 @@ class StagePublic(BaseModel):
 class DepartmentEmbed(BaseModel):
     """Minimal department projection inlined on a project response.
 
-    Just `capabilities` + the i18n-friendly identifiers — saves the
-    frontend a second round-trip per project page when it needs to know
-    which capability tabs to render.
+    Carries `capabilities`, per-capability `capability_configs`, and
+    `terminology` — everything the frontend needs to decide which tabs
+    to render, how each capability tab should look, and what labels to
+    use ("New project" vs "New lead"). Saves the frontend a second
+    round-trip per project page.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -47,6 +50,8 @@ class DepartmentEmbed(BaseModel):
     name: str
     slug: str
     capabilities: list[str]
+    capability_configs: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    terminology: dict[str, dict[str, str]] = Field(default_factory=dict)
 
 
 class CreateProjectBody(BaseModel):

@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ActivityFeed } from "@/features/activity/components/ActivityFeed";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { enabledCapabilities } from "@/features/capabilities/registry";
+import { useTerminology } from "@/features/departments/hooks/useTerminology";
 import { BriefTab } from "@/features/projects/components/BriefTab";
 import { getProject } from "@/features/projects/api";
 import type { Project } from "@/features/projects/types";
@@ -70,6 +71,11 @@ export default function ProjectDetailPage() {
     void reload();
   }, [reload]);
 
+  // Hooks MUST be called on every render in the same order — keep them above
+  // the conditional early returns. `useTerminology` tolerates `undefined`
+  // and just returns a noun-fallback identity while the project loads.
+  const noun = useTerminology(project?.department.terminology);
+
   if (!auth.user) return null;
 
   if (status === "loading") {
@@ -97,6 +103,7 @@ export default function ProjectDetailPage() {
     project.stage.name_i18n.nl ??
     project.stage.key;
   const capabilities = enabledCapabilities(project.department.capabilities);
+  const briefTabLabel = noun("tab_brief", tDetail("tab_brief"));
 
   return (
     <div className="flex h-full flex-col">
@@ -113,7 +120,7 @@ export default function ProjectDetailPage() {
 
       <Tabs defaultValue="brief" className="flex flex-1 flex-col">
         <TabsList className="bg-muted/30 mx-4 mt-4 flex w-fit gap-1 overflow-x-auto md:mx-6">
-          <TabsTrigger value="brief">{tDetail("tab_brief")}</TabsTrigger>
+          <TabsTrigger value="brief">{briefTabLabel}</TabsTrigger>
           {capabilities.map((cap) => (
             <TabsTrigger key={cap.key} value={cap.key}>
               {tabLabel(tDetail, cap.tabLabelKey, cap.name)}

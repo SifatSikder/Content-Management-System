@@ -37,7 +37,7 @@ import {
 import { inviteMember } from "@/features/team/api";
 import type { TeamMember } from "@/features/team/types";
 import { ApiError } from "@/lib/api-client";
-import { ROLES, type Role } from "@/lib/enums";
+import { ROLES, type Role } from "@/features/auth/constants";
 
 const ROLE_OPTIONS = ROLES.filter((r): r is Exclude<Role, "ceo"> => r !== "ceo");
 

@@ -58,6 +58,7 @@ export default function ProjectsPage() {
         setStage={setStageKey}
         onCreated={projectsState.prepend}
         departmentId={department.current.id}
+        terminology={department.current.terminology}
       />
 
       {projectsState.status === "loading" ? (

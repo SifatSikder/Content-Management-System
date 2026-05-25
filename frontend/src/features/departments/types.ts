@@ -3,6 +3,22 @@
  * Mirror `app/schemas/department.py` on the backend.
  */
 
+/**
+ * Per-capability config for a department. Phase C lets templates carry
+ * per-capability JSONB (e.g. `participant_roster` in "lead" mode renders
+ * `display_name + email + phone + source + notes`; in "cast" mode it
+ * renders the legacy cast form). Shape is intentionally open — each
+ * capability key picks its own schema.
+ */
+export type CapabilityConfig = Record<string, unknown>;
+
+/**
+ * Per-noun terminology overrides. Maps a generic noun to its label per
+ * locale — `{project: {en: "Lead", nl: "Lead"}}`. Empty means "use the
+ * default i18n string."
+ */
+export type Terminology = Record<string, Record<string, string>>;
+
 export interface Department {
   id: string;
   business_id: string;
@@ -10,6 +26,8 @@ export interface Department {
   name: string;
   slug: string;
   capabilities: string[];
+  capability_configs: Record<string, CapabilityConfig>;
+  terminology: Terminology;
   archived_at: string | null;
   created_at: string;
   updated_at: string;
@@ -114,6 +132,8 @@ export interface MeDepartmentEntry {
   slug: string;
   role_key: string | null;
   role_name_i18n: Record<string, string> | null;
+  terminology: Terminology;
+  capability_configs: Record<string, CapabilityConfig>;
 }
 
 export interface MeDepartmentsResponse {

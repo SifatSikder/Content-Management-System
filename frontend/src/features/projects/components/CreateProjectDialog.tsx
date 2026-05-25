@@ -36,7 +36,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { createProject } from "@/features/projects/api";
 import type { Project } from "@/features/projects/types";
-import { CATEGORIES, type Category } from "@/lib/enums";
+import { CATEGORIES, type Category } from "@/features/projects/constants";
 
 const schema = z.object({
   title: z.string().min(1).max(200),

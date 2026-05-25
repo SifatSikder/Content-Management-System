@@ -17,7 +17,7 @@ import { mintToken } from "@/server/tokens";
 import { findOrCreateInvitedUser, getActiveUserById } from "@/server/users";
 
 import { jsonError, requireRole } from "@/server/auth-guard";
-import { ROLES, type Role } from "@/lib/enums";
+import { ROLES, type Role } from "@/features/auth/constants";
 
 interface Body {
   email?: string;

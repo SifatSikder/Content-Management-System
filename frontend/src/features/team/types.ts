@@ -1,4 +1,4 @@
-import type { Role } from "@/lib/enums";
+import { type Role } from "@/features/auth/constants";
 
 export interface TeamMember {
   id: string;

@@ -58,6 +58,9 @@ async def create_cast_member(
     role_description: str | None,
     contact_email: str | None,
     contact_phone: str | None,
+    kind: str = "cast",
+    source: str | None = None,
+    notes: str | None = None,
 ) -> CastMemberModel:
     cast = CastMemberModel(
         project_id=project.id,
@@ -65,6 +68,9 @@ async def create_cast_member(
         role_description=role_description,
         contact_email=contact_email,
         contact_phone=contact_phone,
+        kind=kind,
+        source=source,
+        notes=notes,
     )
     session.add(cast)
     await session.flush()

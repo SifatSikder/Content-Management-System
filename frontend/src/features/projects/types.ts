@@ -1,4 +1,4 @@
-import type { Category, PipelineStage } from "@/lib/enums";
+import { type Category } from "@/features/projects/constants";
 
 export interface OwnerPublic {
   id: string;
@@ -21,14 +21,18 @@ export interface ProjectStage {
 
 /**
  * Minimal department embed on a project response — surfaces `capabilities`
- * so the project detail page can decide which capability tabs to render
- * without a second round-trip. Mirrors `app/schemas/project.py::DepartmentEmbed`.
+ * + the Phase C `capability_configs` + `terminology` JSONB so the project
+ * detail page can decide which capability tabs to render, how each tab
+ * should look, and what labels to use ("Lead" vs "Project") without a
+ * second round-trip. Mirrors `app/schemas/project.py::DepartmentEmbed`.
  */
 export interface ProjectDepartment {
   id: string;
   name: string;
   slug: string;
   capabilities: string[];
+  capability_configs: Record<string, Record<string, unknown>>;
+  terminology: Record<string, Record<string, string>>;
 }
 
 export interface Project {
@@ -81,11 +85,3 @@ export interface MoveStageBody {
   stage_key?: string;
 }
 
-/**
- * Legacy helper: returns the project's stage as the old PipelineStage string
- * literal where it matches. New code should prefer `project.stage.key`. Kept
- * for incremental migration of components that still narrow on the enum.
- */
-export function legacyStageKey(project: Project): PipelineStage {
-  return project.stage.key as PipelineStage;
-}

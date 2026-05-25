@@ -18,6 +18,12 @@ class CreateCastMemberBody(BaseModel):
     role_description: str | None = None
     contact_email: EmailStr | None = None
     contact_phone: str | None = Field(default=None, max_length=32)
+    # Phase C: discriminator + lead-only fields. Default `kind="cast"` keeps
+    # the existing casting flow unchanged; lead-mode clients send "lead"
+    # plus `source` + `notes` and ignore the cast-only release_form upload.
+    kind: str = Field(default="cast", pattern=r"^(cast|lead)$", max_length=16)
+    source: str | None = Field(default=None, max_length=120)
+    notes: str | None = None
 
 
 class UpdateCastMemberBody(BaseModel):
@@ -27,6 +33,8 @@ class UpdateCastMemberBody(BaseModel):
     role_description: str | None = None
     contact_email: EmailStr | None = None
     contact_phone: str | None = Field(default=None, max_length=32)
+    source: str | None = Field(default=None, max_length=120)
+    notes: str | None = None
 
 
 class CastMemberPublic(BaseModel):
@@ -40,6 +48,9 @@ class CastMemberPublic(BaseModel):
     contact_phone: str | None
     release_form_object_name: str | None
     confirmed: bool
+    kind: str
+    source: str | None
+    notes: str | None
     created_at: datetime
     updated_at: datetime
 

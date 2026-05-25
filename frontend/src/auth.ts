@@ -23,7 +23,7 @@ import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { SignJWT, jwtVerify } from "jose";
 
-import type { Role } from "@/lib/enums";
+import { type Role } from "@/features/auth/constants";
 import { verifyPassword } from "@/server/password";
 import { getActiveUserByEmail, setAvatarUrl, touchLastLogin } from "@/server/users";
 

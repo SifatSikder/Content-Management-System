@@ -253,6 +253,21 @@
     "photo_upload_failed_named": "Uploaden van {name} mislukt",
     "delete_photo_confirm": "Deze foto verwijderen?"
   },
+  "leads": {
+    "new_lead_title": "Lead toevoegen",
+    "add_lead": "Lead toevoegen",
+    "display_name": "Naam",
+    "email": "E-mail",
+    "phone": "Telefoon",
+    "source": "Bron",
+    "source_placeholder": "bv. webformulier, doorverwijzing",
+    "notes": "Notities",
+    "empty": "Nog geen leads.",
+    "created_toast": "Lead toegevoegd",
+    "deleted_toast": "Lead verwijderd",
+    "confirm_delete_title": "Deze lead verwijderen?",
+    "confirm_delete_body": "De lead wordt permanent verwijderd."
+  },
   "casting": {
     "add": "Cast toevoegen",
     "name": "Naam",

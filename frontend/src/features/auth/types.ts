@@ -1,4 +1,4 @@
-import type { Role } from "@/lib/enums";
+import { type Role } from "@/features/auth/constants";
 
 /** Public projection of a user — matches `app/schemas/auth.py` UserPublic. */
 export interface AuthUser {

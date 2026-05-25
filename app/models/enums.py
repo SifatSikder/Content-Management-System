@@ -60,13 +60,13 @@ class Category(StrEnum):
 
 
 class PipelineStage(StrEnum):
-    """11-stage production pipeline.
+    """REMOVED in Phase D — superseded by per-department `department_stages`.
 
-    DEPRECATED: superseded by per-department `department_stages` rows.
-    Values are kept as keys on the Content Creation template's stages so
-    `project.stage::text == department_stage.key` still resolves cleanly
-    during the Phase B backfill; Phase D drops both the enum and the
-    legacy `projects.stage` mirror column.
+    The class definition stayed in this file as a `pass` placeholder for one
+    release so anything (deserialisation, an external client) that still
+    referenced the name would get a useful ImportError pointing at this
+    docstring rather than a silent attribute miss. Read each project's stage
+    via `project.stage.key` against the `department_stages` table instead.
     """
 
     IDEA = "idea"

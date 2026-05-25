@@ -88,7 +88,13 @@ CurrentUser = Annotated[UserModel, Depends(current_user)]
 
 
 def require_role(*allowed: Role) -> Callable[..., Awaitable[UserModel]]:
-    """Factory: build a dependency that 403s if the current user lacks `allowed`."""
+    """Factory: build a dependency that 403s if the current user lacks `allowed`.
+
+    DEPRECATED in Phase E: prefer `require_action(action_key)` for any check
+    that's department-scoped. `require_role` stays for global gates that
+    don't depend on a project context (e.g. business creation, where only
+    the CEO super-admin should be able to mint a new business).
+    """
 
     async def _dep(user: CurrentUser) -> UserModel:
         if user.role not in allowed:
@@ -100,6 +106,71 @@ def require_role(*allowed: Role) -> Callable[..., Awaitable[UserModel]]:
             )
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient role")
         return user
+
+    return _dep
+
+
+def require_action(action_key: str) -> Callable[..., Awaitable[None]]:
+    """Factory: 403 if the user can't perform `action_key` in the project's
+    department.
+
+    Pairs cleanly with `require_project_access(...)` — the latter loads the
+    project + gates view-level access; this one runs the action-key check on
+    the same project's department. Wire both on the same route:
+
+        @router.post(
+            "/{project_id}/lock",
+            dependencies=[Depends(require_action("script_versioning.lock"))],
+        )
+        async def post_lock(
+            project: Annotated[
+                ProjectModel, Depends(require_project_access(ProjectAccess.VIEW))
+            ],
+            ...
+        ): ...
+
+    CEO super-admins short-circuit to True via `permission_service`. For
+    routes that don't carry `project_id` in the path (e.g. POST /edits/{id}/approve),
+    call `permission_service.can_user_perform_action(...)` inline after
+    loading whichever object carries the department.
+    """
+
+    async def _dep(
+        request: Request,
+        session: SessionDep,
+        user: CurrentUser,
+        project_id: Annotated[uuid.UUID, Path()],
+    ) -> None:
+        from app.services import permission_service
+
+        # Intentionally no `deleted_at IS NULL` filter — `require_action` is
+        # the gate for restore endpoints too, where the project is precisely
+        # the soft-deleted row. Live-only access is enforced via
+        # `require_project_access` on routes that want it.
+        result = await session.execute(
+            select(ProjectModel).where(ProjectModel.id == project_id)
+        )
+        project_row = result.scalar_one_or_none()
+        if project_row is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
+        allowed = await permission_service.can_user_perform_action(
+            session,
+            user=user,
+            department_id=project_row.department_id,
+            action_key=action_key,
+            request=request,
+        )
+        if not allowed:
+            log.warning(
+                "action_denied",
+                user_id=str(user.id),
+                user_role=user.role.value,
+                department_id=str(project_row.department_id),
+                action_key=action_key,
+            )
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, "Insufficient permissions"
+            )
 
     return _dep
 
@@ -260,6 +331,7 @@ __all__ = [
     "SessionDep",
     "can_user_move_to_stage",
     "current_user",
+    "require_action",
     "require_business_admin",
     "require_business_member",
     "require_project_access",

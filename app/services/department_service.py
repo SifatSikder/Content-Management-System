@@ -92,6 +92,30 @@ async def _load_template(
     return template
 
 
+def _load_role_permissions_from_python(template_key: str) -> list[dict[str, Any]]:
+    """Read `default_role_permissions` from the registered Python template.
+
+    Phase B's migration writes templates into `department_templates` without
+    a `default_role_permissions` column — the permission triples are too
+    structured to round-trip as JSONB without schema work, and the Phase B
+    data migration seeded them directly from the Python source. This helper
+    keeps `create_department` consistent with that pattern: the Python
+    template is the authoritative source for permission triples.
+
+    Returns an empty list if the template key isn't registered (e.g. a
+    user-created template that we don't ship code for).
+    """
+    try:
+        from app.seeds.templates import get_template
+    except ImportError:
+        return []
+    try:
+        tpl = get_template(template_key)
+    except KeyError:
+        return []
+    return list(tpl.get("default_role_permissions", []) or [])
+
+
 # --- Departments ---------------------------------------------------------
 
 
@@ -112,20 +136,28 @@ async def create_department(
         candidate = f"{base_slug}-{counter}"
 
     capabilities: list[str] = []
+    capability_configs: dict[str, dict[str, Any]] = {}
+    terminology: dict[str, dict[str, str]] = {}
     seed_stages: list[dict[str, Any]] = []
     seed_roles: list[dict[str, Any]] = []
     seed_role_permissions: list[dict[str, Any]] = []
     if template_key is not None:
         template = await _load_template(session, key=template_key)
         capabilities = list(template.default_capabilities or [])
+        # Copy per-capability config + terminology so later template edits
+        # don't retroactively mutate live departments.
+        capability_configs = dict(
+            getattr(template, "default_capability_configs", None) or {}
+        )
+        terminology = dict(getattr(template, "default_terminology", None) or {})
         seed_stages = list(template.default_stages or [])
         seed_roles = list(template.default_roles or [])
-        # Permissions live in the template JSONB as a flat list of
-        # `{role_key, action_key, allowed}` triples. They map to
-        # `department_role_permissions` rows once we know each role's id.
-        seed_role_permissions = list(
-            getattr(template, "default_role_permissions", None) or []
-        )
+        # Permissions are NOT a column on `department_templates` (Phase B's
+        # migration didn't add one — the data migration there inlined the
+        # permission seed by reading the Python source directly). For
+        # `create_department` calls outside that migration we fall back to
+        # the registered Python template, which is the authoritative source.
+        seed_role_permissions = _load_role_permissions_from_python(template_key)
 
     department = DepartmentModel(
         business_id=business_id,
@@ -133,6 +165,8 @@ async def create_department(
         name=name,
         slug=candidate,
         capabilities=capabilities,
+        capability_configs=capability_configs,
+        terminology=terminology,
     )
     session.add(department)
     try:

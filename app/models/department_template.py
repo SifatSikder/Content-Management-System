@@ -38,6 +38,22 @@ class DepartmentTemplateModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         JSONB, nullable=False, default=list, server_default="[]"
     )
 
+    # Per-capability config — `{capability_key: {kind, visible_fields, …}}`.
+    # Copied into `departments.capability_configs` at instantiation. Phase C
+    # introduced this to make `participant_roster` reusable for both cast
+    # lists and lead lists; future capabilities can carry their own config.
+    default_capability_configs: Mapped[dict[str, dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+
+    # Per-noun UI labels — `{noun: {locale: label}}`. Overrides the
+    # default i18n strings inside this template's departments (e.g. "Lead"
+    # instead of "Project" in Marketing). See the frontend's
+    # `useDepartmentTerminology` hook.
+    default_terminology: Mapped[dict[str, dict[str, str]]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+
     is_system: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )

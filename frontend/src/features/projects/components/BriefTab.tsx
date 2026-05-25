@@ -18,9 +18,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import type { Role } from "@/features/auth/constants";
+import { useCanIDo } from "@/features/permissions/hooks/usePermissions";
 import { updateProject } from "@/features/projects/api";
+import { CATEGORIES, type Category } from "@/features/projects/constants";
 import type { Project } from "@/features/projects/types";
-import { CATEGORIES, canEditProject, type Category, type Role } from "@/lib/enums";
 
 interface Props {
   project: Project;
@@ -29,14 +31,17 @@ interface Props {
   onUpdated: (p: Project) => void;
 }
 
-export function BriefTab({ project, role, isOwner, onUpdated }: Props) {
+export function BriefTab({ project, role: _role, isOwner: _isOwner, onUpdated }: Props) {
   const t = useTranslations("projects");
   const tCat = useTranslations("categories");
   const tCommon = useTranslations("common");
   const tToast = useTranslations("toast");
   const tErr = useTranslations("errors");
 
-  const editable = canEditProject(role, isOwner) && !project.deleted_at;
+  // Permission-backed gate. Returns false until the permission map loads,
+  // hiding the Edit button during that brief window.
+  const canEditAction = useCanIDo(project.department_id, "project.edit");
+  const editable = canEditAction && !project.deleted_at;
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(project.title);
   const [description, setDescription] = useState(project.description ?? "");

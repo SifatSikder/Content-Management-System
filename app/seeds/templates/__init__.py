@@ -37,10 +37,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.seeds.templates import content_creation
+from app.seeds.templates import content_creation, marketing
 
 TEMPLATES: dict[str, dict[str, Any]] = {
     content_creation.TEMPLATE["key"]: content_creation.TEMPLATE,
+    marketing.TEMPLATE["key"]: marketing.TEMPLATE,
 }
 
 

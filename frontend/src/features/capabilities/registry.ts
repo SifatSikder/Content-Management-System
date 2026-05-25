@@ -13,20 +13,20 @@
 
 import type { ComponentType } from "react";
 
-import { CastingTab } from "@/features/casting/components/CastingTab";
-import { EditsTab } from "@/features/edits/components/EditsTab";
-import { LocationTab } from "@/features/locations/components/LocationTab";
-import { ScriptTab } from "@/features/scripts/components/ScriptTab";
-import { ShootTab } from "@/features/shoots/components/ShootTab";
-import type { Role } from "@/lib/enums";
+import { ParticipantRosterTab } from "@/features/capabilities/participant_roster/ParticipantRosterTab";
+import { EditsTab } from "@/features/capabilities/asset_review_with_timecodes/components/EditsTab";
+import { LocationTab } from "@/features/capabilities/location_scouting/components/LocationTab";
+import { ScriptTab } from "@/features/capabilities/script_versioning/components/ScriptTab";
+import { ShootTab } from "@/features/capabilities/event_scheduling/components/ShootTab";
+import { type Role } from "@/features/auth/constants";
 import type { Project } from "@/features/projects/types";
 
 /**
  * Props every capability tab receives. Tabs ignore fields they don't need.
- * Permission decisions inside the tab should defer to `useCanIDo` from
- * `features/permissions`; the legacy `role`/`isOwner` props are still
- * passed because the existing tab implementations consult the deprecated
- * `lib/enums.ts` helpers for now. Phase D moves them over.
+ * Permission decisions inside the tab go through `useCanIDo` from
+ * `features/permissions`; `role` + `isOwner` stay on the props because some
+ * tabs still surface owner-only labels (e.g. "Owned by you") that don't
+ * map to action keys. Capability tabs that don't need them can ignore both.
  */
 export interface ProjectTabProps {
   project: Project;
@@ -75,7 +75,9 @@ export const CAPABILITY_REGISTRY: Record<string, CapabilityEntry> = {
     key: "participant_roster",
     tabLabelKey: "tab_casting",
     name: "Casting",
-    ProjectTab: CastingTab,
+    // ParticipantRosterTab dispatches between the cast and lead forms based
+    // on the department's `capability_configs.participant_roster.kind`.
+    ProjectTab: ParticipantRosterTab,
   },
   event_scheduling: {
     key: "event_scheduling",

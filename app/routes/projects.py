@@ -18,12 +18,11 @@ from app.auth.dependencies import (
     CurrentUser,
     ProjectAccess,
     SessionDep,
+    require_action,
     require_project_access,
-    require_role,
 )
 from app.models.department import DepartmentModel
 from app.models.department_stage import DepartmentStageModel
-from app.models.enums import Role
 from app.models.project import ProjectModel
 from app.schemas.activity import ActivityListResponse, ActivityPublic
 from app.schemas.project import (
@@ -50,9 +49,6 @@ from app.services.project_service import (
 router = APIRouter(prefix="/projects", tags=["projects"])
 log = structlog.get_logger(__name__)
 
-CreatorRoles = require_role(Role.CEO, Role.ASSISTANT_DIRECTOR, Role.JUNIOR_DIRECTOR)
-AdminRoles = require_role(Role.CEO, Role.ASSISTANT_DIRECTOR)
-
 
 @router.post(
     "",
@@ -62,8 +58,9 @@ AdminRoles = require_role(Role.CEO, Role.ASSISTANT_DIRECTOR)
 )
 async def post_project(
     body: CreateProjectBody,
-    user: Annotated[CurrentUser, Depends(CreatorRoles)],
+    user: CurrentUser,
     session: SessionDep,
+    request: Request,
 ) -> ProjectPublic:
     # The business context middleware already validates that the user has
     # access to this business; we still need to resolve the department's
@@ -71,6 +68,24 @@ async def post_project(
     department = await session.get(DepartmentModel, body.department_id)
     if department is None or department.archived_at is not None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Department not found")
+    # Permission check happens inline rather than via a dependency because
+    # this is the create endpoint — there's no `project_id` in the path for
+    # `require_action` to resolve a department from.
+    allowed = await permission_service.can_user_perform_action(
+        session,
+        user=user,
+        department_id=department.id,
+        action_key="project.create",
+        request=request,
+    )
+    if not allowed:
+        log.warning(
+            "action_denied",
+            user_id=str(user.id),
+            department_id=str(department.id),
+            action_key="project.create",
+        )
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient permissions")
 
     try:
         project = await project_service.create_project(
@@ -258,10 +273,11 @@ async def get_activity(
     "/{project_id}/restore",
     response_model=ProjectPublic,
     summary="Restore a soft-deleted project",
+    dependencies=[Depends(require_action("project.delete"))],
 )
 async def post_project_restore(
     project_id: uuid.UUID,
-    user: Annotated[CurrentUser, Depends(AdminRoles)],
+    user: CurrentUser,
     session: SessionDep,
 ) -> ProjectPublic:
     # Bypass the "no deleted" filter — we want to restore a deleted row.

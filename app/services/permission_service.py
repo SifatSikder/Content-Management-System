@@ -36,7 +36,6 @@ from app.models.department import DepartmentModel
 from app.models.department_membership import DepartmentMembershipModel
 from app.models.department_role_permission import DepartmentRolePermissionModel
 from app.models.department_stage import DepartmentStageModel
-from app.models.enums import Role
 from app.models.project import ProjectModel
 from app.models.user import UserModel
 
@@ -154,15 +153,17 @@ async def can_user_access_project(
       * Otherwise: check the user's department role's `project.edit` /
         `project.delete` permission, with VIEW granted to anyone with a
         department membership.
+
+    Phase D dropped the Phase-B-era `_legacy_*` fallbacks. After the B2
+    backfill every project carries a `department_id`, and the
+    `projects.department_id NOT NULL` constraint from `b3f8c5d1a7e9`
+    guarantees it stays that way. If you somehow hit a row without one,
+    that's a bug, not a degraded path.
     """
     if user.is_super_admin:
         return True
     if project.owner_id == user.id:
         return True
-    if project.department_id is None:
-        # Legacy real-estate row that hasn't been backfilled yet — fall back
-        # to the Phase-1 matrix so existing endpoints don't 403 mid-migration.
-        return _legacy_user_can_access_project(user, project, level)
 
     perms = await permissions_for_user(
         session, user=user, department_id=project.department_id, request=request
@@ -193,8 +194,6 @@ async def can_user_move_to_stage(
     """
     if user.is_super_admin:
         return True
-    if project.department_id is None:
-        return _legacy_can_user_move_to_stage(user, project, target_stage_id)
 
     target_q = await session.execute(
         select(DepartmentStageModel).where(DepartmentStageModel.id == target_stage_id)
@@ -244,60 +243,6 @@ async def get_department(
     session: AsyncSession, department_id: uuid.UUID
 ) -> DepartmentModel | None:
     return await session.get(DepartmentModel, department_id)
-
-
-# ---------- legacy fallbacks (only used until Phase B's backfill lands) ----
-
-
-def _legacy_user_can_access_project(
-    user: UserModel, project: ProjectModel, level: str
-) -> bool:
-    """Phase-1 role matrix — kept verbatim from `app/auth/dependencies.py`.
-
-    Only invoked when a project still has `department_id IS NULL` (i.e.
-    Phase B's backfill migration hasn't run yet). After Phase B every
-    project has a department; this branch becomes dead code in the next
-    cleanup PR.
-    """
-    if user.role == Role.CEO:
-        return True
-
-    if level == "view":
-        if user.role == Role.CREW:
-            return project.owner_id == user.id
-        return True
-
-    if level == "edit":
-        if user.role == Role.ASSISTANT_DIRECTOR:
-            return True
-        if user.role in (Role.JUNIOR_DIRECTOR, Role.EDITOR):
-            return project.owner_id == user.id
-        return False
-
-    if level == "manage":
-        if user.role == Role.ASSISTANT_DIRECTOR:
-            return True
-        if user.role == Role.JUNIOR_DIRECTOR:
-            return project.owner_id == user.id
-        return False
-
-    return False
-
-
-def _legacy_can_user_move_to_stage(
-    user: UserModel,
-    project: ProjectModel,
-    target_stage_id: uuid.UUID,
-) -> bool:
-    """Fallback for not-yet-backfilled projects — same logic shape as the old
-    `can_user_move_to_stage`, but receives a stage id we can't introspect
-    against an enum. Conservative default: only CEO + AD can move.
-    """
-    if user.role in (Role.CEO, Role.ASSISTANT_DIRECTOR):
-        return True
-    if user.role == Role.JUNIOR_DIRECTOR:
-        return project.owner_id == user.id
-    return False
 
 
 __all__ = [

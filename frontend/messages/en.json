@@ -253,6 +253,21 @@
     "photo_upload_failed_named": "Failed to upload {name}",
     "delete_photo_confirm": "Delete this photo?"
   },
+  "leads": {
+    "new_lead_title": "Add lead",
+    "add_lead": "Add lead",
+    "display_name": "Name",
+    "email": "Email",
+    "phone": "Phone",
+    "source": "Source",
+    "source_placeholder": "e.g. webform, referral",
+    "notes": "Notes",
+    "empty": "No leads yet.",
+    "created_toast": "Lead added",
+    "deleted_toast": "Lead removed",
+    "confirm_delete_title": "Remove this lead?",
+    "confirm_delete_body": "The lead row will be permanently deleted."
+  },
   "casting": {
     "add": "Add cast member",
     "name": "Name",

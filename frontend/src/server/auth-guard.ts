@@ -6,7 +6,7 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
-import type { Role } from "@/lib/enums";
+import { type Role } from "@/features/auth/constants";
 
 export function jsonError(status: number, detail: string): NextResponse {
   return NextResponse.json({ detail }, { status });

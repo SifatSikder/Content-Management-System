@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
@@ -43,6 +44,18 @@ class DepartmentModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     capabilities: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list, server_default="[]"
+    )
+    # Per-capability config copied from the template at instantiation. Shape:
+    # `{capability_key: {kind, visible_fields, …}}`. Phase C uses this to
+    # let `participant_roster` render a cast form vs a lead form.
+    capability_configs: Mapped[dict[str, dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+    # Per-noun label overrides copied from the template. Shape:
+    # `{noun: {locale: label}}`. Used by the frontend `useDepartmentTerminology`
+    # hook to render context-aware labels (e.g. "New lead" vs "New project").
+    terminology: Mapped[dict[str, dict[str, str]]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
     )
     archived_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
