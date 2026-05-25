@@ -51,7 +51,6 @@ export default function BusinessDashboardPage() {
     <div className="mx-auto w-full max-w-5xl space-y-8 p-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">{business.name}</h1>
-        <p className="text-muted-foreground font-mono text-xs">{business.slug}</p>
       </header>
       <DepartmentList
         businessId={business.id}

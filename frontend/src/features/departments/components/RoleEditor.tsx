@@ -157,9 +157,6 @@ export function RoleEditor({ department }: { department: Department }) {
                       <div className="truncate text-sm font-medium">
                         {r.name_i18n.en ?? r.name_i18n.nl ?? r.key}
                       </div>
-                      <div className="text-muted-foreground font-mono text-xs">
-                        {r.key}
-                      </div>
                     </div>
                     <Badge variant="outline" className="font-normal">
                       {t("permissions_count", {

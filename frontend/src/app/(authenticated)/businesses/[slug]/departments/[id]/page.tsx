@@ -145,7 +145,6 @@ export default function DepartmentDetailPage() {
             </>
           )}
         </div>
-        <p className="text-muted-foreground font-mono text-xs">{department.slug}</p>
       </header>
 
       {/*

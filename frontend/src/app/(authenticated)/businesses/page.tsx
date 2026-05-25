@@ -68,9 +68,6 @@ export default function BusinessesPage() {
                     <Building2 className="size-4" />
                     <span className="truncate">{b.name}</span>
                   </CardTitle>
-                  <CardDescription className="font-mono text-xs">
-                    {b.slug}
-                  </CardDescription>
                 </CardHeader>
               </Card>
             </Link>

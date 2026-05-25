@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
@@ -75,9 +74,6 @@ export function DepartmentList({
                         <FolderKanban className="size-4" />
                         <span className="truncate">{d.name}</span>
                       </CardTitle>
-                      <CardDescription className="font-mono text-xs">
-                        {d.slug}
-                      </CardDescription>
                     </div>
                     {d.archived_at ? (
                       <Badge variant="outline">{t("archived")}</Badge>
