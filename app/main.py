@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 
+from app.capabilities import registry as capability_registry
 from app.config import Settings, get_settings
 from app.core.business_context import BusinessContextMiddleware
 from app.core.exceptions import register_exception_handlers
@@ -22,7 +23,6 @@ from app.routes import (
     auth,
     business_memberships,
     businesses,
-    casting,
     dashboard,
     department_memberships,
     department_role_permissions,
@@ -30,15 +30,11 @@ from app.routes import (
     department_stages,
     departments,
     drive,
-    edits,
     health,
-    locations,
     me,
     notification_prefs,
     projects,
     push,
-    scripts,
-    shoots,
 )
 
 log = structlog.get_logger(__name__)
@@ -51,6 +47,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Start-up:
       * warm the async DB pool (fail fast if DB unreachable)
       * validate settings (Pydantic does this at import, but we log the env)
+      * log the capability registry so misconfigurations are visible early
     Shutdown:
       * dispose the engine
     """
@@ -59,6 +56,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         "app_startup",
         env=settings.app_env,
         base_url=settings.app_base_url,
+        capabilities=[c.key for c in capability_registry.all_capabilities()],
     )
 
     # Warm DB pool — surface bad DB URLs immediately.
@@ -111,26 +109,17 @@ def create_app() -> FastAPI:
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
 
-    # Routers.
+    # --- Core routers ---------------------------------------------------
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(projects.router)
-    app.include_router(scripts.projects_router)
-    app.include_router(scripts.scripts_router)
-    app.include_router(edits.projects_router)
-    app.include_router(edits.edits_router)
-    app.include_router(locations.projects_router)
-    app.include_router(locations.locations_router)
-    app.include_router(casting.projects_router)
-    app.include_router(casting.cast_router)
-    app.include_router(shoots.projects_router)
-    app.include_router(shoots.shoots_router)
     app.include_router(push.router)
     app.include_router(drive.auth_router)
     app.include_router(drive.projects_router)
     app.include_router(dashboard.router)
     app.include_router(notification_prefs.router)
-    # Atlas multi-business scaffolding (Phase A).
+
+    # --- Atlas multi-business scaffolding (Phase A) ---------------------
     app.include_router(businesses.router)
     app.include_router(business_memberships.router)
     app.include_router(departments.business_router)
@@ -140,6 +129,15 @@ def create_app() -> FastAPI:
     app.include_router(department_role_permissions.router)
     app.include_router(department_memberships.router)
     app.include_router(me.router)
+
+    # --- Capability routers (Phase B) -----------------------------------
+    # Every registered capability ships its routers regardless of whether
+    # any department has it enabled — the per-route `require_capability`
+    # dependency does the actual gating per-project. This keeps the URL
+    # surface stable as departments enable/disable capabilities at runtime.
+    for capability in capability_registry.all_capabilities():
+        for router in capability.routers:
+            app.include_router(router)
 
     return app
 

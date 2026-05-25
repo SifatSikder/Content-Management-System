@@ -130,7 +130,7 @@ async def _load_location_and_project(
     except LocationNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Location not found") from exc
     project = await _project_for_location(session, location)
-    if not _user_can_access_project(user, project, level):
+    if not await _user_can_access_project(session, user, project, level):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
     return location, project
 
@@ -306,7 +306,7 @@ async def get_photo_url(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Photo not found") from exc
     location = await location_service.get_location(session, location_id=photo.location_id)
     project = await _project_for_location(session, location)
-    if not _user_can_access_project(user, project, ProjectAccess.VIEW):
+    if not await _user_can_access_project(session, user, project, ProjectAccess.VIEW):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
     url = await storage_service.signed_read_url(
         bucket_name=photo.gcs_bucket,
@@ -333,7 +333,7 @@ async def delete_photo(
     # Resolve project for permission check.
     location = await location_service.get_location(session, location_id=photo.location_id)
     project = await _project_for_location(session, location)
-    if not _user_can_access_project(user, project, ProjectAccess.EDIT):
+    if not await _user_can_access_project(session, user, project, ProjectAccess.EDIT):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
     await location_service.delete_photo(session, photo=photo, actor=user)
     await session.commit()

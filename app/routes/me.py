@@ -24,6 +24,8 @@ from app.models.department_role import DepartmentRoleModel
 from app.models.enums import BusinessMembershipStatus
 from app.schemas.business import MeBusinessEntry, MeBusinessesResponse
 from app.schemas.department import MeDepartmentEntry, MeDepartmentsResponse
+from app.schemas.permission import MePermissionsResponse
+from app.services import permission_service
 
 router = APIRouter(prefix="/me", tags=["me"])
 log = structlog.get_logger(__name__)
@@ -149,3 +151,33 @@ async def get_my_departments(
         for d, role_key, role_name_i18n in rows.all()
     ]
     return MeDepartmentsResponse(items=items)
+
+
+@router.get(
+    "/permissions",
+    response_model=MePermissionsResponse,
+    summary="Resolved {action_key: allowed} map for the current user in a department",
+)
+async def get_my_permissions(
+    user: CurrentUser,
+    session: SessionDep,
+    department_id: Annotated[uuid.UUID, Query(...)],
+) -> MePermissionsResponse:
+    """Batched permission lookup the frontend uses to render kanban
+    affordances + per-tab action buttons.
+
+    For CEO super-admins, returns `is_super_admin=True` with an empty
+    `allowed` map — the frontend treats that as "every action allowed".
+    """
+    # The default tenant policy scopes this query by the request's business;
+    # the permission service reads `department_role_permissions` which the
+    # request's business context already covers. No bypass needed here.
+    perms = await permission_service.permissions_for_user(
+        session, user=user, department_id=department_id
+    )
+    payload = permission_service.serialise_action_map(perms)
+    return MePermissionsResponse(
+        department_id=department_id,
+        is_super_admin=payload["is_super_admin"],
+        allowed=payload["allowed"],
+    )

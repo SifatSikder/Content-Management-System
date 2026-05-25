@@ -53,7 +53,7 @@ export function ScriptTab({ project, role, isOwner, onProjectUpdated }: Props) {
   const tToast = useTranslations("toast");
   const tErr = useTranslations("errors");
 
-  const locked = project.stage === "script_locked";
+  const locked = project.stage.key === "script_locked";
   const canEdit = canEditProject(role, isOwner) && !locked && !project.deleted_at;
 
   const [versions, setVersions] = useState<ScriptVersion[]>([]);
@@ -225,7 +225,7 @@ export function ScriptTab({ project, role, isOwner, onProjectUpdated }: Props) {
                 {t("save_new_version")}
               </Button>
             )}
-            {canEdit && project.stage === "script_drafting" && (
+            {canEdit && project.stage.key === "script_drafting" && (
               <Button size="sm" variant="secondary" onClick={submit}>
                 <Send className="mr-2 size-4" />
                 {t("submit_for_review")}

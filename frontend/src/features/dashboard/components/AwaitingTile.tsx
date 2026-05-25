@@ -9,16 +9,21 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchAwaiting } from "@/features/dashboard/api";
 import type { AwaitingItem } from "@/features/dashboard/types";
+import { useStageLabel } from "@/features/departments/hooks/useStageLabel";
 
-export function AwaitingTile() {
+interface Props {
+  departmentId: string;
+}
+
+export function AwaitingTile({ departmentId }: Props) {
   const t = useTranslations("dashboard");
-  const tStages = useTranslations("stages");
+  const stageLabel = useStageLabel(departmentId);
   const [items, setItems] = useState<AwaitingItem[] | null>(null);
   const [err, setErr] = useState(false);
 
   useEffect(() => {
-    fetchAwaiting().then(setItems).catch(() => setErr(true));
-  }, []);
+    fetchAwaiting(departmentId).then(setItems).catch(() => setErr(true));
+  }, [departmentId]);
 
   return (
     <Card>
@@ -55,7 +60,7 @@ export function AwaitingTile() {
                 {new Date(item.uploaded_at).toLocaleDateString()}
               </div>
             </div>
-            <Badge variant="outline">{tStages(item.stage)}</Badge>
+            <Badge variant="outline">{stageLabel(item.stage)}</Badge>
           </Link>
         ))}
       </CardContent>

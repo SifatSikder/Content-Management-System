@@ -114,11 +114,18 @@ async def create_department(
     capabilities: list[str] = []
     seed_stages: list[dict[str, Any]] = []
     seed_roles: list[dict[str, Any]] = []
+    seed_role_permissions: list[dict[str, Any]] = []
     if template_key is not None:
         template = await _load_template(session, key=template_key)
         capabilities = list(template.default_capabilities or [])
         seed_stages = list(template.default_stages or [])
         seed_roles = list(template.default_roles or [])
+        # Permissions live in the template JSONB as a flat list of
+        # `{role_key, action_key, allowed}` triples. They map to
+        # `department_role_permissions` rows once we know each role's id.
+        seed_role_permissions = list(
+            getattr(template, "default_role_permissions", None) or []
+        )
 
     department = DepartmentModel(
         business_id=business_id,
@@ -133,29 +140,83 @@ async def create_department(
     except IntegrityError as exc:
         raise SlugTakenError(candidate) from exc
 
+    # First pass: create stages without resolving cross-stage references.
+    stage_id_by_key: dict[str, uuid.UUID] = {}
+    stages_pending_resolution: list[tuple[DepartmentStageModel, list[str]]] = []
     for idx, raw in enumerate(seed_stages):
-        session.add(
-            DepartmentStageModel(
-                department_id=department.id,
-                business_id=business_id,
-                key=raw.get("key") or f"stage-{idx}",
-                name_i18n=raw.get("name_i18n") or {},
-                order_index=raw.get("order_index", idx),
-                is_terminal=bool(raw.get("is_terminal", False)),
-                color=raw.get("color"),
-                allowed_from_stage_ids=raw.get("allowed_from_stage_ids", []),
-            )
+        key = raw.get("key") or f"stage-{idx}"
+        # Templates carry `allowed_from_stage_keys` (string keys); live rows
+        # store ids. Keep `allowed_from_stage_ids` accepted for backwards
+        # compatibility (Phase A path passes ids directly).
+        allowed_keys = raw.get("allowed_from_stage_keys")
+        if allowed_keys is None:
+            preset_ids = raw.get("allowed_from_stage_ids", [])
+            allowed_ids: list[str] = [str(sid) for sid in preset_ids]
+            allowed_keys_pending: list[str] = []
+        else:
+            allowed_ids = []
+            allowed_keys_pending = list(allowed_keys)
+
+        stage = DepartmentStageModel(
+            department_id=department.id,
+            business_id=business_id,
+            key=key,
+            name_i18n=raw.get("name_i18n") or {},
+            order_index=raw.get("order_index", idx),
+            is_terminal=bool(raw.get("is_terminal", False)),
+            color=raw.get("color"),
+            allowed_from_stage_ids=allowed_ids,
         )
+        session.add(stage)
+        stages_pending_resolution.append((stage, allowed_keys_pending))
+    await session.flush()
+    for stage, _ in stages_pending_resolution:
+        stage_id_by_key[stage.key] = stage.id
+
+    # Second pass: resolve allowed_from_stage_keys → ids now that every
+    # sibling stage has an id.
+    for stage, pending_keys in stages_pending_resolution:
+        if not pending_keys:
+            continue
+        resolved = [
+            str(stage_id_by_key[k]) for k in pending_keys if k in stage_id_by_key
+        ]
+        stage.allowed_from_stage_ids = resolved
+
+    # Roles.
+    role_id_by_key: dict[str, uuid.UUID] = {}
     for raw in seed_roles:
+        role_key = raw.get("key") or "member"
+        role = DepartmentRoleModel(
+            department_id=department.id,
+            business_id=business_id,
+            key=role_key,
+            name_i18n=raw.get("name_i18n") or {},
+            description=raw.get("description"),
+        )
+        session.add(role)
+        await session.flush()
+        role_id_by_key[role_key] = role.id
+
+    # Permissions — only the explicit `allowed=True` rows go in; absence
+    # means "denied" at lookup time.
+    for raw in seed_role_permissions:
+        role_key = raw.get("role_key")
+        action_key = raw.get("action_key")
+        if not role_key or not action_key:
+            continue
+        role_id = role_id_by_key.get(role_key)
+        if role_id is None:
+            continue
         session.add(
-            DepartmentRoleModel(
-                department_id=department.id,
+            DepartmentRolePermissionModel(
+                department_role_id=role_id,
                 business_id=business_id,
-                key=raw.get("key") or "member",
-                name_i18n=raw.get("name_i18n") or {},
-                description=raw.get("description"),
+                action_key=action_key,
+                allowed=bool(raw.get("allowed", False)),
             )
         )
+
     await session.flush()
     return department
 

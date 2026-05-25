@@ -49,10 +49,12 @@ type FormValues = z.infer<typeof schema>;
 
 interface Props {
   onCreated: (p: Project) => void;
+  /** The department the new project will be created inside. */
+  departmentId: string;
   trigger?: React.ReactNode;
 }
 
-export function CreateProjectDialog({ onCreated, trigger }: Props) {
+export function CreateProjectDialog({ onCreated, departmentId, trigger }: Props) {
   const tProj = useTranslations("projects");
   const tCommon = useTranslations("common");
   const tCat = useTranslations("categories");
@@ -70,6 +72,7 @@ export function CreateProjectDialog({ onCreated, trigger }: Props) {
       const project = await createProject({
         title: values.title,
         category: values.category,
+        department_id: departmentId,
         description: values.description || null,
         due_date: values.due_date || null,
       });

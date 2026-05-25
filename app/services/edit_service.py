@@ -16,10 +16,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.edit import EditCommentModel, EditVersionModel
-from app.models.enums import EditStatus, PipelineStage, Role
+from app.models.enums import EditStatus, Role
 from app.models.project import ProjectModel
 from app.models.user import UserModel
-from app.services import activity_service
+from app.services import activity_service, project_service
 
 log = structlog.get_logger(__name__)
 
@@ -34,6 +34,33 @@ class EditCommentNotFoundError(Exception):
 
 class IllegalEditTransitionError(Exception):
     """Approve / request-changes called on an edit in a wrong status."""
+
+
+async def _advance_stage(
+    session: AsyncSession,
+    *,
+    project: ProjectModel,
+    target_key: str,
+    actor_id: uuid.UUID,
+) -> None:
+    """Resolve `target_key` to a stage_id inside `project.department_id` and
+    move the project there. No-op if the target key doesn't exist in the
+    department (other templates may not model this transition)."""
+    target_id = await project_service.resolve_stage_id_by_key(
+        session, department_id=project.department_id, key=target_key
+    )
+    if target_id is None or target_id == project.stage_id:
+        return
+    previous_key = project.stage.key
+    project.stage_id = target_id
+    await session.refresh(project, attribute_names=["stage"])
+    await activity_service.record(
+        session,
+        project_id=project.id,
+        actor_id=actor_id,
+        action="project.stage_changed",
+        metadata={"from": previous_key, "to": target_key},
+    )
 
 
 async def _next_version_number(session: AsyncSession, project_id: uuid.UUID) -> int:
@@ -81,21 +108,9 @@ async def add_edit_version(
     session.add(edit)
     await session.flush()
 
-    # First edit upload advances the project to EDITING.
-    if project.stage not in (
-        PipelineStage.EDITING,
-        PipelineStage.FINAL_REVIEW,
-        PipelineStage.APPROVED_PUBLISHED,
-    ):
-        previous = project.stage
-        project.stage = PipelineStage.EDITING
-        await activity_service.record(
-            session,
-            project_id=project.id,
-            actor_id=uploader.id,
-            action="project.stage_changed",
-            metadata={"from": previous.value, "to": PipelineStage.EDITING.value},
-        )
+    # First edit upload advances the project to "editing".
+    if project.stage.key not in ("editing", "final_review", "approved_published"):
+        await _advance_stage(session, project=project, target_key="editing", actor_id=uploader.id)
 
     await activity_service.record(
         session,
@@ -127,17 +142,11 @@ async def approve_edit(
 
     metadata: dict[str, object] = {"version_number": edit.version_number}
 
-    # CEO approval → APPROVED_PUBLISHED. Anyone else's approve just records the
-    # decision without moving the project to its terminal stage.
-    if actor.role == Role.CEO and project.stage != PipelineStage.APPROVED_PUBLISHED:
-        previous = project.stage
-        project.stage = PipelineStage.APPROVED_PUBLISHED
-        await activity_service.record(
-            session,
-            project_id=project.id,
-            actor_id=actor.id,
-            action="project.stage_changed",
-            metadata={"from": previous.value, "to": PipelineStage.APPROVED_PUBLISHED.value},
+    # CEO approval → "approved_published" (terminal stage). Anyone else's
+    # approve just records the decision without moving the project.
+    if actor.role == Role.CEO and project.stage.key != "approved_published":
+        await _advance_stage(
+            session, project=project, target_key="approved_published", actor_id=actor.id
         )
         metadata["published"] = True
 
@@ -166,17 +175,9 @@ async def request_changes(
     # are tracked via subsequent edit versions, not by appending here.
     edit.notes = notes
 
-    # Make sure the project is in the EDITING stage so the editor can upload V+1.
-    if project.stage != PipelineStage.EDITING:
-        previous = project.stage
-        project.stage = PipelineStage.EDITING
-        await activity_service.record(
-            session,
-            project_id=project.id,
-            actor_id=actor.id,
-            action="project.stage_changed",
-            metadata={"from": previous.value, "to": PipelineStage.EDITING.value},
-        )
+    # Make sure the project is in "editing" so the editor can upload V+1.
+    if project.stage.key != "editing":
+        await _advance_stage(session, project=project, target_key="editing", actor_id=actor.id)
 
     await activity_service.record(
         session,

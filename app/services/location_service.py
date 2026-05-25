@@ -14,12 +14,35 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.enums import PipelineStage
 from app.models.location import LocationModel
 from app.models.location_photo import LocationPhotoModel
 from app.models.project import ProjectModel
 from app.models.user import UserModel
-from app.services import activity_service
+from app.services import activity_service, project_service
+
+
+async def _advance_stage(
+    session: AsyncSession,
+    *,
+    project: ProjectModel,
+    target_key: str,
+    actor_id: uuid.UUID,
+) -> None:
+    target_id = await project_service.resolve_stage_id_by_key(
+        session, department_id=project.department_id, key=target_key
+    )
+    if target_id is None or target_id == project.stage_id:
+        return
+    previous_key = project.stage.key
+    project.stage_id = target_id
+    await session.refresh(project, attribute_names=["stage"])
+    await activity_service.record(
+        session,
+        project_id=project.id,
+        actor_id=actor_id,
+        action="project.stage_changed",
+        metadata={"from": previous_key, "to": target_key},
+    )
 
 
 class LocationNotFoundError(Exception):
@@ -62,22 +85,11 @@ async def create_location(
     )
 
     # First location on the project nudges the stage forward from idea/script
-    # phases into LOCATION_SCOUTING. We don't auto-advance past scouting until
-    # the location is confirmed (see `confirm_location`).
-    if project.stage in (
-        PipelineStage.SCRIPT_LOCKED,
-        PipelineStage.SCRIPT_REVIEW,
-        PipelineStage.SCRIPT_DRAFTING,
-        PipelineStage.IDEA,
-    ):
-        prev = project.stage
-        project.stage = PipelineStage.LOCATION_SCOUTING
-        await activity_service.record(
-            session,
-            project_id=project.id,
-            actor_id=actor.id,
-            action="project.stage_changed",
-            metadata={"from": prev.value, "to": PipelineStage.LOCATION_SCOUTING.value},
+    # phases into "location_scouting". We don't auto-advance past scouting
+    # until the location is confirmed (see `confirm_location`).
+    if project.stage.key in ("script_locked", "script_review", "script_drafting", "idea"):
+        await _advance_stage(
+            session, project=project, target_key="location_scouting", actor_id=actor.id
         )
 
     return location
@@ -149,18 +161,10 @@ async def confirm_location(
         metadata={"location_id": str(location.id)},
     )
 
-    # Spec §4 row 6: "Location confirmed" auto-advances LOCATION_SCOUTING → CASTING.
-    if confirmed and project.stage == PipelineStage.LOCATION_SCOUTING:
-        project.stage = PipelineStage.CASTING
-        await activity_service.record(
-            session,
-            project_id=project.id,
-            actor_id=actor.id,
-            action="project.stage_changed",
-            metadata={
-                "from": PipelineStage.LOCATION_SCOUTING.value,
-                "to": PipelineStage.CASTING.value,
-            },
+    # Spec §4 row 6: "Location confirmed" auto-advances location_scouting → casting.
+    if confirmed and project.stage.key == "location_scouting":
+        await _advance_stage(
+            session, project=project, target_key="casting", actor_id=actor.id
         )
     return location
 

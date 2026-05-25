@@ -6,21 +6,26 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchTimeInStage } from "@/features/dashboard/api";
 import type { TimeInStage } from "@/features/dashboard/types";
+import { useStageLabel } from "@/features/departments/hooks/useStageLabel";
+
+interface Props {
+  departmentId: string;
+}
 
 function fmt(value: number | null): string {
   if (value === null) return "—";
   return value < 1 ? value.toFixed(2) : value.toFixed(1);
 }
 
-export function TimeInStageTable() {
+export function TimeInStageTable({ departmentId }: Props) {
   const t = useTranslations("dashboard");
-  const tStages = useTranslations("stages");
+  const stageLabel = useStageLabel(departmentId);
   const [rows, setRows] = useState<TimeInStage[] | null>(null);
   const [err, setErr] = useState(false);
 
   useEffect(() => {
-    fetchTimeInStage().then(setRows).catch(() => setErr(true));
-  }, []);
+    fetchTimeInStage(departmentId).then(setRows).catch(() => setErr(true));
+  }, [departmentId]);
 
   return (
     <Card>
@@ -46,7 +51,7 @@ export function TimeInStageTable() {
             <tbody>
               {rows.map((row) => (
                 <tr key={row.stage} className="border-t">
-                  <td className="py-1.5">{tStages(row.stage)}</td>
+                  <td className="py-1.5">{stageLabel(row.stage)}</td>
                   <td className="py-1.5 text-right">{row.sample_size}</td>
                   <td className="py-1.5 text-right">{fmt(row.avg_days)}</td>
                   <td className="py-1.5 text-right">{fmt(row.max_days)}</td>

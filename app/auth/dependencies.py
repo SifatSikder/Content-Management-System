@@ -38,7 +38,7 @@ from app.auth.jwt import InvalidTokenError, decode_access_token
 from app.core.business_context import business_scoped_session
 from app.models.business import BusinessModel
 from app.models.business_membership import BusinessMembershipModel
-from app.models.enums import BusinessMembershipStatus, PipelineStage, Role
+from app.models.enums import BusinessMembershipStatus, Role
 from app.models.project import ProjectModel
 from app.models.user import UserModel
 
@@ -104,44 +104,38 @@ def require_role(*allowed: Role) -> Callable[..., Awaitable[UserModel]]:
     return _dep
 
 
-def _user_can_access_project(
-    user: UserModel, project: ProjectModel, level: ProjectAccess
+async def _user_can_access_project(
+    session: AsyncSession,
+    user: UserModel,
+    project: ProjectModel,
+    level: ProjectAccess,
+    *,
+    request: Request | None = None,
 ) -> bool:
-    """Pure predicate — no DB or HTTP. Easy to unit-test.
+    """Thin shim that routes the legacy access check through
+    `permission_service.can_user_access_project`.
 
-    Encodes spec §6 + the "assigned only" rule for crew (proxied by ownership
-    until an explicit assignments table lands).
+    The signature keeps the same call sites that already pass
+    `(user, project, level)` — they now also pass `session` + the optional
+    `request`. Most callers are already inside an `async def` with both in
+    scope, so the migration cost is per-callsite-one-line.
     """
-    if user.role == Role.CEO:
-        return True
+    from app.services import permission_service
 
-    if level == ProjectAccess.VIEW:
-        # Crew sees only their assigned project; everyone else sees all.
-        if user.role == Role.CREW:
-            return project.owner_id == user.id
-        return True
-
-    if level == ProjectAccess.EDIT:
-        if user.role == Role.ASSISTANT_DIRECTOR:
-            return True
-        if user.role in (Role.JUNIOR_DIRECTOR, Role.EDITOR):
-            return project.owner_id == user.id
-        return False
-
-    if level == ProjectAccess.MANAGE:
-        if user.role == Role.ASSISTANT_DIRECTOR:
-            return True
-        if user.role == Role.JUNIOR_DIRECTOR:
-            return project.owner_id == user.id
-        return False
-
-    return False
+    return await permission_service.can_user_access_project(
+        session,
+        user=user,
+        project=project,
+        level=level.value,
+        request=request,
+    )
 
 
 def require_project_access(level: ProjectAccess) -> Callable[..., Awaitable[ProjectModel]]:
     """Factory: resolve `project_id` path param, 404 / 403, or return the project."""
 
     async def _dep(
+        request: Request,
         session: SessionDep,
         user: CurrentUser,
         project_id: Annotated[uuid.UUID, Path()],
@@ -155,7 +149,10 @@ def require_project_access(level: ProjectAccess) -> Callable[..., Awaitable[Proj
         project = result.scalar_one_or_none()
         if project is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
-        if not _user_can_access_project(user, project, level):
+        allowed = await _user_can_access_project(
+            session, user, project, level, request=request
+        )
+        if not allowed:
             log.warning(
                 "project_access_denied",
                 user_id=str(user.id),
@@ -169,23 +166,29 @@ def require_project_access(level: ProjectAccess) -> Callable[..., Awaitable[Proj
     return _dep
 
 
-def can_user_move_to_stage(
-    user: UserModel, project: ProjectModel, target_stage: PipelineStage
+async def can_user_move_to_stage(
+    session: AsyncSession,
+    user: UserModel,
+    project: ProjectModel,
+    target_stage_id: uuid.UUID,
+    *,
+    request: Request | None = None,
 ) -> bool:
-    """Pure predicate — can `user` move `project` to `target_stage`?
+    """Async wrapper around `permission_service.can_user_move_to_stage`.
 
-    Spec §6: stage moves are restricted to CEO + Assistant Director (always);
-    Junior Director on owned/assigned projects; nobody else. Marking a project
-    `approved_published` is reserved for CEO alone.
+    Kept here for the same reason the access shim above is — callers that
+    haven't been refactored to import `permission_service` directly can
+    keep going through this module.
     """
-    if target_stage == PipelineStage.APPROVED_PUBLISHED:
-        return user.role == Role.CEO
+    from app.services import permission_service
 
-    if user.role in (Role.CEO, Role.ASSISTANT_DIRECTOR):
-        return True
-    if user.role == Role.JUNIOR_DIRECTOR:
-        return project.owner_id == user.id
-    return False
+    return await permission_service.can_user_move_to_stage(
+        session,
+        user=user,
+        project=project,
+        target_stage_id=target_stage_id,
+        request=request,
+    )
 
 
 async def require_business_member(

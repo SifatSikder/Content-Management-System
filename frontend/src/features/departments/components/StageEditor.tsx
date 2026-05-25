@@ -14,7 +14,7 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { GripVertical, Plus, Trash2 } from "lucide-react";
+import { GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -50,9 +50,11 @@ import { ApiError } from "@/lib/api-client";
 function SortableStageRow({
   stage,
   onDelete,
+  onRename,
 }: {
   stage: Stage;
   onDelete: () => void;
+  onRename: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: stage.id });
@@ -87,6 +89,9 @@ function SortableStageRow({
         </div>
         <div className="text-muted-foreground font-mono text-xs">{stage.key}</div>
       </div>
+      <Button variant="ghost" size="icon" onClick={onRename} aria-label="Rename stage">
+        <Pencil className="size-4" />
+      </Button>
       <Button variant="ghost" size="icon" onClick={onDelete} aria-label="Delete stage">
         <Trash2 className="size-4" />
       </Button>
@@ -99,6 +104,7 @@ export function StageEditor({ departmentId }: { departmentId: string }) {
   const tCommon = useTranslations("common");
   const [stages, setStages] = useState<Stage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [renaming, setRenaming] = useState<Stage | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -186,6 +192,7 @@ export function StageEditor({ departmentId }: { departmentId: string }) {
                     key={s.id}
                     stage={s}
                     onDelete={() => void handleDelete(s)}
+                    onRename={() => setRenaming(s)}
                   />
                 ))}
               </div>
@@ -193,7 +200,95 @@ export function StageEditor({ departmentId }: { departmentId: string }) {
           </DndContext>
         )}
       </CardContent>
+      <RenameStageDialog
+        departmentId={departmentId}
+        stage={renaming}
+        onClose={() => setRenaming(null)}
+        onSaved={() => {
+          setRenaming(null);
+          void load();
+        }}
+      />
     </Card>
+  );
+}
+
+function RenameStageDialog({
+  departmentId,
+  stage,
+  onClose,
+  onSaved,
+}: {
+  departmentId: string;
+  stage: Stage | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const t = useTranslations("departments");
+  const tCommon = useTranslations("common");
+  const [nameEn, setNameEn] = useState("");
+  const [nameNl, setNameNl] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  // Re-seed inputs whenever the parent picks a different stage to edit.
+  useEffect(() => {
+    setNameEn(stage?.name_i18n.en ?? "");
+    setNameNl(stage?.name_i18n.nl ?? "");
+  }, [stage]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!stage) return;
+    setSubmitting(true);
+    try {
+      await updateStage(departmentId, stage.id, {
+        name_i18n: { en: nameEn.trim(), nl: nameNl.trim() || nameEn.trim() },
+      });
+      toast.success(t("stage_renamed_toast"));
+      onSaved();
+    } catch (exc) {
+      toast.error(exc instanceof ApiError ? exc.message : tCommon("error"));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Dialog open={stage !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t("rename_stage")}</DialogTitle>
+        </DialogHeader>
+        <form className="space-y-4" onSubmit={submit}>
+          <div className="space-y-2">
+            <Label htmlFor="rename-stage-name-en">{t("name_en_label")}</Label>
+            <Input
+              id="rename-stage-name-en"
+              required
+              value={nameEn}
+              onChange={(e) => setNameEn(e.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="rename-stage-name-nl">{t("name_nl_label")}</Label>
+            <Input
+              id="rename-stage-name-nl"
+              value={nameNl}
+              onChange={(e) => setNameNl(e.target.value)}
+              placeholder={nameEn}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              {tCommon("cancel")}
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {tCommon("save")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

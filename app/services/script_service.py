@@ -14,11 +14,10 @@ import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.enums import PipelineStage
 from app.models.project import ProjectModel
 from app.models.script import ScriptCommentModel, ScriptModel, ScriptVersionModel
 from app.models.user import UserModel
-from app.services import activity_service
+from app.services import activity_service, project_service
 
 log = structlog.get_logger(__name__)
 
@@ -66,7 +65,7 @@ async def add_version(
     author: UserModel,
     body_markdown: str,
 ) -> ScriptVersionModel:
-    if project.stage == PipelineStage.SCRIPT_LOCKED:
+    if project.stage.key == "script_locked":
         raise IllegalStageTransitionError("Cannot add a version while the script is locked")
 
     script = await _get_or_create_script(session, project)
@@ -82,17 +81,11 @@ async def add_version(
 
     script.current_version_id = version.id
 
-    # First version moves the project past IDEA into SCRIPT_DRAFTING.
-    if project.stage == PipelineStage.IDEA:
-        previous = project.stage
-        project.stage = PipelineStage.SCRIPT_DRAFTING
-        await activity_service.record(
-            session,
-            project_id=project.id,
-            actor_id=author.id,
-            action="project.stage_changed",
-            metadata={"from": previous.value, "to": PipelineStage.SCRIPT_DRAFTING.value},
-        )
+    # First version moves the project past "idea" into "script_drafting" —
+    # both are template stage keys on Content Creation. For other templates
+    # without these specific keys, the auto-advance simply doesn't fire.
+    if project.stage.key == "idea":
+        await _advance_stage(session, project=project, target_key="script_drafting", actor_id=author.id)
 
     await activity_service.record(
         session,
@@ -102,6 +95,35 @@ async def add_version(
         metadata={"version_number": version_number},
     )
     return version
+
+
+async def _advance_stage(
+    session: AsyncSession,
+    *,
+    project: ProjectModel,
+    target_key: str,
+    actor_id: uuid.UUID,
+) -> None:
+    """Best-effort auto-advance to `target_key` within the project's
+    department. No-op if the target key doesn't exist (e.g. the
+    department's workflow doesn't model this transition)."""
+    target_id = await project_service.resolve_stage_id_by_key(
+        session, department_id=project.department_id, key=target_key
+    )
+    if target_id is None or target_id == project.stage_id:
+        return
+    previous_key = project.stage.key
+    project.stage_id = target_id
+    # Refresh the relationship so subsequent reads see the new stage's key
+    # without an extra round-trip.
+    await session.refresh(project, attribute_names=["stage"])
+    await activity_service.record(
+        session,
+        project_id=project.id,
+        actor_id=actor_id,
+        action="project.stage_changed",
+        metadata={"from": previous_key, "to": target_key},
+    )
 
 
 async def list_versions(session: AsyncSession, *, project: ProjectModel) -> list[ScriptVersionModel]:
@@ -233,9 +255,9 @@ async def reopen_comment(
 async def submit_script(
     session: AsyncSession, *, project: ProjectModel, actor: UserModel
 ) -> ProjectModel:
-    if project.stage != PipelineStage.SCRIPT_DRAFTING:
+    if project.stage.key != "script_drafting":
         raise IllegalStageTransitionError(
-            f"Cannot submit from stage {project.stage.value}"
+            f"Cannot submit from stage {project.stage.key}"
         )
     # Mark the latest version as submitted.
     result = await session.execute(
@@ -249,13 +271,13 @@ async def submit_script(
     if latest is not None and latest.submitted_at is None:
         latest.submitted_at = datetime.now(UTC)
 
-    project.stage = PipelineStage.SCRIPT_REVIEW
+    await _advance_stage(session, project=project, target_key="script_review", actor_id=actor.id)
     await activity_service.record(
         session,
         project_id=project.id,
         actor_id=actor.id,
         action="script.submitted",
-        metadata={"to": PipelineStage.SCRIPT_REVIEW.value},
+        metadata={"to": "script_review"},
     )
     return project
 
@@ -263,11 +285,11 @@ async def submit_script(
 async def lock_script(
     session: AsyncSession, *, project: ProjectModel, actor: UserModel
 ) -> ProjectModel:
-    if project.stage not in (PipelineStage.SCRIPT_DRAFTING, PipelineStage.SCRIPT_REVIEW):
+    if project.stage.key not in ("script_drafting", "script_review"):
         raise IllegalStageTransitionError(
-            f"Cannot lock from stage {project.stage.value}"
+            f"Cannot lock from stage {project.stage.key}"
         )
-    project.stage = PipelineStage.SCRIPT_LOCKED
+    await _advance_stage(session, project=project, target_key="script_locked", actor_id=actor.id)
     project.script_locked_at = datetime.now(UTC)
     project.script_locked_by = actor.id
 
@@ -283,11 +305,11 @@ async def lock_script(
 async def unlock_script(
     session: AsyncSession, *, project: ProjectModel, actor: UserModel
 ) -> ProjectModel:
-    if project.stage != PipelineStage.SCRIPT_LOCKED:
+    if project.stage.key != "script_locked":
         raise IllegalStageTransitionError(
-            f"Cannot unlock from stage {project.stage.value}"
+            f"Cannot unlock from stage {project.stage.key}"
         )
-    project.stage = PipelineStage.SCRIPT_REVIEW
+    await _advance_stage(session, project=project, target_key="script_review", actor_id=actor.id)
     project.script_locked_at = None
     project.script_locked_by = None
     await activity_service.record(

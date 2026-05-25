@@ -286,7 +286,7 @@ async def post_comment(
     session: SessionDep,
 ) -> CommentPublic:
     project = await _project_for_version(session, version_id)
-    if not _user_can_access_project(user, project, ProjectAccess.VIEW):
+    if not await _user_can_access_project(session, user, project, ProjectAccess.VIEW):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
 
     try:
@@ -317,7 +317,7 @@ async def get_comments(
     session: SessionDep,
 ) -> list[CommentPublic]:
     project = await _project_for_version(session, version_id)
-    if not _user_can_access_project(user, project, ProjectAccess.VIEW):
+    if not await _user_can_access_project(session, user, project, ProjectAccess.VIEW):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
     comments = await script_service.list_comments(session, version_id=version_id)
     return [CommentPublic.model_validate(c) for c in comments]
@@ -338,7 +338,7 @@ async def post_resolve(
     except ScriptCommentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Comment not found") from exc
     project = await _project_for_version(session, comment.version_id)
-    if not _user_can_access_project(user, project, ProjectAccess.EDIT):
+    if not await _user_can_access_project(session, user, project, ProjectAccess.EDIT):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
     await script_service.resolve_comment(session, comment=comment, actor=user)
     await session.commit()
@@ -361,7 +361,7 @@ async def post_reopen(
     except ScriptCommentNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Comment not found") from exc
     project = await _project_for_version(session, comment.version_id)
-    if not _user_can_access_project(user, project, ProjectAccess.EDIT):
+    if not await _user_can_access_project(session, user, project, ProjectAccess.EDIT):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
     await script_service.reopen_comment(session, comment=comment, actor=user)
     await session.commit()

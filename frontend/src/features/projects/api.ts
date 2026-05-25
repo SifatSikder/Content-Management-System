@@ -1,15 +1,16 @@
 import { apiFetchAuthed } from "@/lib/api-client";
-import type { PipelineStage } from "@/lib/enums";
 
 import type {
   CreateProjectBody,
+  MoveStageBody,
   Project,
   ProjectListResponse,
   UpdateProjectBody,
 } from "./types";
 
 export interface ListProjectsParams {
-  stage?: PipelineStage;
+  /** Filter by stage *key* (e.g. `"idea"`). Per-department; resolves to the matching stage row. */
+  stage?: string;
   owner_id?: string;
   filter?: "mine";
   cursor?: string;
@@ -46,10 +47,15 @@ export function updateProject(id: string, body: UpdateProjectBody): Promise<Proj
   });
 }
 
-export function moveStage(id: string, stage: PipelineStage): Promise<Project> {
+/**
+ * Move the project to another stage. Accepts either a `stage_id` (preferred)
+ * or the stage `key` (legacy fallback). The backend resolves the key inside
+ * the project's department.
+ */
+export function moveStage(id: string, target: MoveStageBody): Promise<Project> {
   return apiFetchAuthed<Project>(`/projects/${id}/stage`, {
     method: "POST",
-    body: { stage } as unknown as BodyInit,
+    body: target as unknown as BodyInit,
   });
 }
 

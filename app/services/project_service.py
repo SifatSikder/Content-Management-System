@@ -21,7 +21,8 @@ import structlog
 from sqlalchemy import ColumnElement, and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.enums import Category, PipelineStage, Role
+from app.models.department_stage import DepartmentStageModel
+from app.models.enums import Category, Role
 from app.models.project import ProjectModel
 from app.models.user import UserModel
 from app.services import activity_service
@@ -40,9 +41,13 @@ class InvalidCursorError(Exception):
     """Pagination cursor failed to decode."""
 
 
+class StageNotFoundError(Exception):
+    """No stage with the given key exists in the requested department."""
+
+
 @dataclass(frozen=True)
 class ListFilters:
-    stage: PipelineStage | None = None
+    stage_key: str | None = None
     owner_id: uuid.UUID | None = None
     mine: bool = False
     include_deleted: bool = False
@@ -63,17 +68,63 @@ def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
         raise InvalidCursorError(f"Invalid cursor: {cursor!r}") from exc
 
 
+async def _first_stage_id_for_department(
+    session: AsyncSession, *, department_id: uuid.UUID
+) -> uuid.UUID:
+    """Return the lowest-order_index stage in a department.
+
+    Used as the initial stage for newly-created projects. Raises if the
+    department has no stages — that's a misconfiguration (every template
+    must define at least one).
+    """
+    result = await session.execute(
+        select(DepartmentStageModel.id)
+        .where(DepartmentStageModel.department_id == department_id)
+        .order_by(DepartmentStageModel.order_index.asc(), DepartmentStageModel.created_at.asc())
+        .limit(1)
+    )
+    stage_id = result.scalar_one_or_none()
+    if stage_id is None:
+        raise StageNotFoundError(
+            f"Department {department_id} has no stages — cannot create a project"
+        )
+    return stage_id
+
+
+async def resolve_stage_id_by_key(
+    session: AsyncSession,
+    *,
+    department_id: uuid.UUID,
+    key: str,
+) -> uuid.UUID | None:
+    """Return the stage id whose key matches inside the given department."""
+    result = await session.execute(
+        select(DepartmentStageModel.id).where(
+            DepartmentStageModel.department_id == department_id,
+            DepartmentStageModel.key == key,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
 async def create_project(
     session: AsyncSession,
     *,
     actor: UserModel,
     title: str,
     category: Category,
+    business_id: uuid.UUID,
+    department_id: uuid.UUID,
     description: str | None = None,
     due_date: object | None = None,
     owner_id_override: uuid.UUID | None = None,
+    stage_id: uuid.UUID | None = None,
 ) -> ProjectModel:
-    """Create a project. Activity row + commit are the caller's responsibility."""
+    """Create a project. Activity row + commit are the caller's responsibility.
+
+    `stage_id` defaults to the department's first stage (lowest order_index)
+    so the caller doesn't have to know about the per-template entry stage.
+    """
     owner = actor
     if owner_id_override is not None and actor.role in (Role.CEO, Role.ASSISTANT_DIRECTOR):
         override = await session.get(UserModel, owner_id_override)
@@ -81,16 +132,26 @@ async def create_project(
             raise ProjectNotFoundError(f"owner_id_override {owner_id_override} not found")
         owner = override
 
+    if stage_id is None:
+        stage_id = await _first_stage_id_for_department(
+            session, department_id=department_id
+        )
+
     project = ProjectModel(
         title=title,
         description=description,
         category=category,
-        stage=PipelineStage.IDEA,
+        business_id=business_id,
+        department_id=department_id,
+        stage_id=stage_id,
         owner=owner,
         due_date=due_date,
     )
     session.add(project)
     await session.flush()
+    # Eager-load the relationships so callers can read `project.stage.key`
+    # immediately after creation without an extra refresh.
+    await session.refresh(project, attribute_names=["stage", "department"])
 
     await activity_service.record(
         session,
@@ -137,8 +198,17 @@ async def list_projects(
         where.append(ProjectModel.owner_id == user.id)
     if filters.owner_id is not None:
         where.append(ProjectModel.owner_id == filters.owner_id)
-    if filters.stage is not None:
-        where.append(ProjectModel.stage == filters.stage)
+    if filters.stage_key is not None:
+        # Join through department_stages to filter by stage key. The
+        # business-context RLS policy already scopes stages to the current
+        # business so the comparison is unambiguous within one tenant.
+        where.append(
+            ProjectModel.stage_id.in_(
+                select(DepartmentStageModel.id).where(
+                    DepartmentStageModel.key == filters.stage_key
+                )
+            )
+        )
 
     query = select(ProjectModel).where(and_(*where)) if where else select(ProjectModel)
     query = query.order_by(ProjectModel.created_at.desc(), ProjectModel.id.desc())
@@ -209,22 +279,31 @@ async def move_stage(
     *,
     actor: UserModel,
     project: ProjectModel,
-    target_stage: PipelineStage,
+    target_stage_id: uuid.UUID,
 ) -> ProjectModel:
-    """Move the project to `target_stage`. Permission check is the caller's job
-    via `can_user_move_to_stage` — this function just performs the write.
+    """Move the project to `target_stage_id`. Permission check is the caller's
+    job via `permission_service.can_user_move_to_stage` — this function just
+    performs the write + activity log.
     """
-    if project.stage == target_stage:
+    if project.stage_id == target_stage_id:
         return project
-    previous = project.stage
-    project.stage = target_stage
+    previous_key = project.stage.key if project.stage else None
+    target_q = await session.execute(
+        select(DepartmentStageModel).where(DepartmentStageModel.id == target_stage_id)
+    )
+    target = target_q.scalar_one_or_none()
+    if target is None:
+        raise StageNotFoundError(str(target_stage_id))
+
+    project.stage_id = target_stage_id
+    project.stage = target  # keep the relationship in sync for downstream reads
 
     await activity_service.record(
         session,
         project_id=project.id,
         actor_id=actor.id,
         action="project.stage_changed",
-        metadata={"from": previous.value, "to": target_stage.value},
+        metadata={"from": previous_key, "to": target.key},
     )
     return project
 
@@ -263,10 +342,12 @@ __all__ = [
     "InvalidCursorError",
     "ListFilters",
     "ProjectNotFoundError",
+    "StageNotFoundError",
     "create_project",
     "get_project",
     "list_projects",
     "move_stage",
+    "resolve_stage_id_by_key",
     "restore",
     "soft_delete",
     "update_project",

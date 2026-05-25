@@ -1,8 +1,9 @@
-"""Project model — the central entity. Each row is one video production.
+"""Project model — the central entity. Each row is one production unit
+inside a department's pipeline.
 
-Stage progresses through `PipelineStage`. Soft-deleted with 30-day window
-(spec §10). `script_locked_at` / `script_locked_by` capture when a director
-locked the script (so /unlock is auditable).
+Stage is read via the `stage` relationship to `department_stages`; the
+legacy `PipelineStage` enum column was dropped in Phase B. Soft-deleted
+with a 30-day window per spec §10.
 """
 
 from __future__ import annotations
@@ -15,7 +16,9 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
-from app.models.enums import Category, PipelineStage, pg_enum
+from app.models.department import DepartmentModel
+from app.models.department_stage import DepartmentStageModel
+from app.models.enums import Category, pg_enum
 from app.models.user import UserModel
 
 
@@ -28,38 +31,35 @@ class ProjectModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     category: Mapped[Category] = mapped_column(
         pg_enum(Category, name="category"), nullable=False
     )
-    # Legacy hard-coded pipeline stage. Phase A keeps it for the existing
-    # real-estate flow; Phase B switches the kanban over to `stage_id` and
-    # this column is dropped after one release.
-    stage: Mapped[PipelineStage] = mapped_column(
-        pg_enum(PipelineStage, name="pipeline_stage"),
+
+    # --- Multi-business scaffolding (Phase A) → backfilled in Phase B ------
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("businesses.id", ondelete="RESTRICT"),
         nullable=False,
-        default=PipelineStage.IDEA,
+        index=True,
+    )
+    department_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("departments.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    stage_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("department_stages.id", ondelete="RESTRICT"),
+        nullable=False,
         index=True,
     )
 
-    # --- Multi-business scaffolding (Phase A) ------------------------------
-    # All three are nullable in Phase A — existing rows have no business or
-    # department yet. Phase B backfills them when the real-estate flow is
-    # migrated into the "Content Creation" department template under a
-    # "Sons Real Estate" business and then flips these NOT NULL.
-    business_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("businesses.id", ondelete="RESTRICT"),
-        nullable=True,
-        index=True,
+    # Eager-loaded so `project.stage.key` is always available without an
+    # extra round-trip. Every project page reads it; lazy would just punt
+    # one query for every project to a follow-up SELECT.
+    stage: Mapped[DepartmentStageModel] = relationship(
+        DepartmentStageModel, foreign_keys=[stage_id], lazy="selectin"
     )
-    department_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("departments.id", ondelete="RESTRICT"),
-        nullable=True,
-        index=True,
-    )
-    stage_id: Mapped[uuid.UUID | None] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("department_stages.id", ondelete="RESTRICT"),
-        nullable=True,
-        index=True,
+    department: Mapped[DepartmentModel] = relationship(
+        DepartmentModel, foreign_keys=[department_id], lazy="selectin"
     )
 
     owner_id: Mapped[uuid.UUID] = mapped_column(

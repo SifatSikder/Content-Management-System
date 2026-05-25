@@ -1,6 +1,17 @@
 /**
- * String-literal mirrors of the Postgres enums in `app/models/enums.py`.
- * Keep in sync — these are the single source of truth on the frontend.
+ * String-literal mirrors of the legacy Postgres enums in
+ * `app/models/enums.py` (Phase 1).
+ *
+ * **DEPRECATED for permission decisions.** Per-department roles + stages
+ * live in the DB now (Phase B). Use `features/permissions/hooks/usePermissions`
+ * + the upcoming `useDepartmentStages(departmentId)` hook for permission
+ * checks and stage lists.
+ *
+ * The type aliases (`Role`, `PipelineStage`, `Category`, `EditStatus`) stay
+ * because the legacy `projects.stage` enum column is still on disk during
+ * the Phase B transition; the predicate helpers below (`canMoveToStage`,
+ * `canEditProject`) are kept ONLY as a fallback for projects that haven't
+ * been backfilled into a department yet. New call sites should not use them.
  */
 
 export const ROLES = [

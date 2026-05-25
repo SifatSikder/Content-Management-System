@@ -22,17 +22,18 @@ function formatWeek(iso: string): string {
 }
 
 interface Props {
+  departmentId: string;
   weeks?: number;
 }
 
-export function ThroughputChart({ weeks = 12 }: Props) {
+export function ThroughputChart({ departmentId, weeks = 12 }: Props) {
   const t = useTranslations("dashboard");
   const [data, setData] = useState<ThroughputBucket[] | null>(null);
   const [err, setErr] = useState(false);
 
   useEffect(() => {
-    fetchThroughput(weeks).then(setData).catch(() => setErr(true));
-  }, [weeks]);
+    fetchThroughput(departmentId, weeks).then(setData).catch(() => setErr(true));
+  }, [departmentId, weeks]);
 
   return (
     <Card>

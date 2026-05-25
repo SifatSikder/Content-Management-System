@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -9,22 +9,45 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ActivityFeed } from "@/features/activity/components/ActivityFeed";
 import { useAuth } from "@/features/auth/hooks/useAuth";
-import { CastingTab } from "@/features/casting/components/CastingTab";
-import { EditsTab } from "@/features/edits/components/EditsTab";
-import { LocationTab } from "@/features/locations/components/LocationTab";
+import { enabledCapabilities } from "@/features/capabilities/registry";
 import { BriefTab } from "@/features/projects/components/BriefTab";
 import { getProject } from "@/features/projects/api";
 import type { Project } from "@/features/projects/types";
-import { ScriptTab } from "@/features/scripts/components/ScriptTab";
-import { ShootTab } from "@/features/shoots/components/ShootTab";
 import { ApiError } from "@/lib/api-client";
 
+/**
+ * Safe i18n lookup. next-intl throws on missing keys in dev (and renders
+ * the key path in prod), so for dynamic capability labels we wrap the call
+ * and fall back to the registry's English `name`.
+ */
+function tabLabel(
+  t: (key: string) => string,
+  key: string,
+  fallback: string,
+): string {
+  try {
+    return t(key);
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * Project detail page. The tab set is dynamic: it's the intersection of
+ * `project.department.capabilities` (JSONB array of capability keys) and the
+ * frontend capability registry (`features/capabilities/registry.ts`).
+ *
+ * A department that disables a capability hides the tab but keeps the
+ * backend route reachable for any in-flight UI state; the backend's
+ * `require_capability` dependency 404s the underlying endpoints when the
+ * dependency is wired up, so the user can't sneak around the disabled tab.
+ */
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
   const projectId = params.id;
   const auth = useAuth();
+  const locale = useLocale();
   const tDetail = useTranslations("project_detail");
-  const tStages = useTranslations("stages");
   const tCommon = useTranslations("common");
 
   const [project, setProject] = useState<Project | null>(null);
@@ -68,13 +91,19 @@ export default function ProjectDetailPage() {
   }
 
   const isOwner = project.owner_id === auth.user.id;
+  const stageLabel =
+    project.stage.name_i18n[locale] ??
+    project.stage.name_i18n.en ??
+    project.stage.name_i18n.nl ??
+    project.stage.key;
+  const capabilities = enabledCapabilities(project.department.capabilities);
 
   return (
     <div className="flex h-full flex-col">
       <header className="space-y-2 border-b px-4 py-4 md:px-6">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-xl font-semibold">{project.title}</h1>
-          <Badge variant="outline">{tStages(project.stage)}</Badge>
+          <Badge variant="outline">{stageLabel}</Badge>
           {project.deleted_at && <Badge variant="destructive">deleted</Badge>}
         </div>
         {project.deleted_at && (
@@ -85,11 +114,11 @@ export default function ProjectDetailPage() {
       <Tabs defaultValue="brief" className="flex flex-1 flex-col">
         <TabsList className="bg-muted/30 mx-4 mt-4 flex w-fit gap-1 overflow-x-auto md:mx-6">
           <TabsTrigger value="brief">{tDetail("tab_brief")}</TabsTrigger>
-          <TabsTrigger value="script">{tDetail("tab_script")}</TabsTrigger>
-          <TabsTrigger value="location">{tDetail("tab_location")}</TabsTrigger>
-          <TabsTrigger value="casting">{tDetail("tab_casting")}</TabsTrigger>
-          <TabsTrigger value="shoot">{tDetail("tab_shoot")}</TabsTrigger>
-          <TabsTrigger value="edits">{tDetail("tab_edits")}</TabsTrigger>
+          {capabilities.map((cap) => (
+            <TabsTrigger key={cap.key} value={cap.key}>
+              {tabLabel(tDetail, cap.tabLabelKey, cap.name)}
+            </TabsTrigger>
+          ))}
           <TabsTrigger value="activity">{tDetail("tab_activity")}</TabsTrigger>
         </TabsList>
 
@@ -101,21 +130,19 @@ export default function ProjectDetailPage() {
             onUpdated={setProject}
           />
         </TabsContent>
-        <TabsContent value="script" className="px-4 py-4 md:px-6">
-          <ScriptTab project={project} role={auth.user.role} isOwner={isOwner} onProjectUpdated={setProject} />
-        </TabsContent>
-        <TabsContent value="location" className="px-4 py-4 md:px-6">
-          <LocationTab project={project} />
-        </TabsContent>
-        <TabsContent value="casting" className="px-4 py-4 md:px-6">
-          <CastingTab project={project} />
-        </TabsContent>
-        <TabsContent value="shoot" className="px-4 py-4 md:px-6">
-          <ShootTab project={project} />
-        </TabsContent>
-        <TabsContent value="edits" className="px-4 py-4 md:px-6">
-          <EditsTab project={project} role={auth.user.role} isOwner={isOwner} onProjectUpdated={setProject} />
-        </TabsContent>
+        {capabilities.map((cap) => {
+          const role = auth.user!.role;
+          return (
+            <TabsContent key={cap.key} value={cap.key} className="px-4 py-4 md:px-6">
+              <cap.ProjectTab
+                project={project}
+                role={role}
+                isOwner={isOwner}
+                onProjectUpdated={setProject}
+              />
+            </TabsContent>
+          );
+        })}
         <TabsContent value="activity" className="px-0">
           <ActivityFeed projectId={project.id} />
         </TabsContent>

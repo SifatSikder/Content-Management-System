@@ -1,13 +1,25 @@
-export interface NotificationPrefs {
-  push_project_created: boolean;
-  push_script_submitted: boolean;
-  push_script_locked: boolean;
-  push_cut_uploaded: boolean;
-  push_cut_comment: boolean;
-  push_cut_approved: boolean;
-  push_cut_changes_requested: boolean;
-  push_project_published: boolean;
-  push_project_stuck: boolean;
+/**
+ * Department-scoped notification preferences.
+ *
+ * Mirror of `app/schemas/notification_prefs.py`. Each `EventPref` represents
+ * one event the department defines (e.g. `cut_uploaded`) with the user's
+ * effective on/off (`enabled`) and the department's default for reference.
+ */
+
+export interface EventPref {
+  event_key: string;
+  name_i18n: Record<string, string>;
+  default_enabled: boolean;
+  enabled: boolean;
 }
 
-export type NotificationPrefsPatch = Partial<NotificationPrefs>;
+export interface DepartmentPrefs {
+  department_id: string;
+  events: EventPref[];
+}
+
+export interface SetEventPrefBody {
+  department_id: string;
+  event_key: string;
+  enabled: boolean;
+}

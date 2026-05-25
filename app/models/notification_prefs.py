@@ -1,18 +1,20 @@
-"""Per-user notification preferences (Phase 3 Task 3.5).
+"""Per-user notification preferences (legacy umbrella row).
 
-One row per user. Booleans gate whether push notifications for each event
-type are dispatched. Opt-out model — every event defaults to **enabled** so
-users see notifications until they explicitly mute them.
+Phase B moved per-event opt-in/out into `user_notification_pref_events`
+(keyed by `user_id` + `department_id` + `event_key`). This umbrella row
+stays so existing FK relationships still resolve and so we have a single
+spot to attach future cross-department preferences (digest cadence,
+quiet hours), but no per-event booleans live here anymore.
 
-The event names mirror `app.services.activity_service` actions but with the
-dot replaced by an underscore (Postgres column names can't contain dots).
+For the predicate `push_service.notify_user` calls before enqueuing a
+job, see `notification_prefs_service.is_event_enabled`.
 """
 
 from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey
+from sqlalchemy import ForeignKey
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,47 +32,5 @@ class UserNotificationPrefsModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         index=True,
     )
 
-    push_project_created: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="true"
-    )
-    push_script_submitted: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="true"
-    )
-    push_script_locked: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="true"
-    )
-    push_cut_uploaded: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="true"
-    )
-    push_cut_comment: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="true"
-    )
-    push_cut_approved: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="true"
-    )
-    push_cut_changes_requested: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="true"
-    )
-    push_project_published: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="true"
-    )
-    push_project_stuck: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="true"
-    )
 
-
-# Event key → model attribute. Keep these in sync.
-EVENT_FIELDS: dict[str, str] = {
-    "project_created": "push_project_created",
-    "script_submitted": "push_script_submitted",
-    "script_locked": "push_script_locked",
-    "cut_uploaded": "push_cut_uploaded",
-    "cut_comment": "push_cut_comment",
-    "cut_approved": "push_cut_approved",
-    "cut_changes_requested": "push_cut_changes_requested",
-    "project_published": "push_project_published",
-    "project_stuck": "push_project_stuck",
-}
-
-
-__all__ = ["EVENT_FIELDS", "UserNotificationPrefsModel"]
+__all__ = ["UserNotificationPrefsModel"]

@@ -77,4 +77,4 @@ ignore_missing_imports = true
 
 [tool.codespell]
 skip = "*.lock,uv.lock,pnpm-lock.yaml,*.min.js,*.min.css,frontend/.next/**,frontend/node_modules/**,frontend/public/**,.git/**,frontend/messages/nl.json,project_spec.md"
-ignore-words-list = "te,categorie,onze,dele"
+ignore-words-list = "te,categorie,onze,dele,selectin,stil"

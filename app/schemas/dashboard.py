@@ -1,4 +1,9 @@
-"""Pydantic DTOs for /dashboard/* endpoints (Phase 3 Task 3.2)."""
+"""Pydantic DTOs for /dashboard/* endpoints (Phase 3 Task 3.2).
+
+Phase B: `stage` is the department stage *key* (a free-form string) rather
+than the legacy `PipelineStage` enum. Other templates with different stage
+sets surface their own keys here.
+"""
 
 from __future__ import annotations
 
@@ -7,15 +12,13 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from app.models.enums import PipelineStage
-
 
 class AwaitingItemPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     project_id: uuid.UUID
     project_title: str
-    stage: PipelineStage
+    stage: str
     cut_id: uuid.UUID
     cut_version: int
     uploaded_at: datetime
@@ -25,7 +28,7 @@ class AwaitingItemPublic(BaseModel):
 class StageCountPublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    stage: PipelineStage
+    stage: str
     count: int
 
 
@@ -34,7 +37,7 @@ class StuckProjectPublic(BaseModel):
 
     project_id: uuid.UUID
     project_title: str
-    stage: PipelineStage
+    stage: str
     owner_id: uuid.UUID
     owner_name: str
     last_activity_at: datetime | None
@@ -51,7 +54,7 @@ class ThroughputBucketPublic(BaseModel):
 class TimeInStagePublic(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    stage: PipelineStage
+    stage: str
     sample_size: int
     avg_days: float | None
     max_days: float | None

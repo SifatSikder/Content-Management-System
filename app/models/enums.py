@@ -32,7 +32,14 @@ def pg_enum(enum_cls: type[Enum], *, name: str) -> SAEnum:
 
 
 class Role(StrEnum):
-    """User role. Authority order: CEO > Assistant Director > Junior Director > Editor > Crew > Viewer."""
+    """User role.
+
+    DEPRECATED for project work: superseded by `department_roles` +
+    `department_role_permissions` in the DB. Only `Role.CEO` remains
+    load-bearing — it's the global super-admin bit on `users.role` that
+    short-circuits the permission service. The other values stay as a
+    legacy shim until Phase D deletes them.
+    """
 
     CEO = "ceo"
     ASSISTANT_DIRECTOR = "assistant_director"
@@ -53,7 +60,14 @@ class Category(StrEnum):
 
 
 class PipelineStage(StrEnum):
-    """11-stage production pipeline. See project_spec.md §4 for Dutch labels."""
+    """11-stage production pipeline.
+
+    DEPRECATED: superseded by per-department `department_stages` rows.
+    Values are kept as keys on the Content Creation template's stages so
+    `project.stage::text == department_stage.key` still resolves cleanly
+    during the Phase B backfill; Phase D drops both the enum and the
+    legacy `projects.stage` mirror column.
+    """
 
     IDEA = "idea"
     SCRIPT_DRAFTING = "script_drafting"

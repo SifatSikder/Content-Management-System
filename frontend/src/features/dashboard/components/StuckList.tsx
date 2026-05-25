@@ -9,20 +9,22 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchStuck } from "@/features/dashboard/api";
 import type { StuckProject } from "@/features/dashboard/types";
+import { useStageLabel } from "@/features/departments/hooks/useStageLabel";
 
 interface Props {
+  departmentId: string;
   days?: number;
 }
 
-export function StuckList({ days = 5 }: Props) {
+export function StuckList({ departmentId, days = 5 }: Props) {
   const t = useTranslations("dashboard");
-  const tStages = useTranslations("stages");
+  const stageLabel = useStageLabel(departmentId);
   const [items, setItems] = useState<StuckProject[] | null>(null);
   const [err, setErr] = useState(false);
 
   useEffect(() => {
-    fetchStuck(days).then(setItems).catch(() => setErr(true));
-  }, [days]);
+    fetchStuck(departmentId, days).then(setItems).catch(() => setErr(true));
+  }, [departmentId, days]);
 
   return (
     <Card>
@@ -58,7 +60,7 @@ export function StuckList({ days = 5 }: Props) {
                 {t("stuck_idle_for", { days: item.days_idle })} · {item.owner_name}
               </div>
             </div>
-            <Badge variant="outline">{tStages(item.stage)}</Badge>
+            <Badge variant="outline">{stageLabel(item.stage)}</Badge>
           </Link>
         ))}
       </CardContent>

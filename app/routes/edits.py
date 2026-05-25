@@ -198,7 +198,7 @@ async def get_edit(
     except EditNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Edit not found") from exc
     project = await _project_for_edit(session, edit)
-    if not _user_can_access_project(user, project, ProjectAccess.VIEW):
+    if not await _user_can_access_project(session, user, project, ProjectAccess.VIEW):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
     return EditVersionPublic.model_validate(edit)
 
@@ -218,7 +218,7 @@ async def get_playback_url(
     except EditNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Edit not found") from exc
     project = await _project_for_edit(session, edit)
-    if not _user_can_access_project(user, project, ProjectAccess.VIEW):
+    if not await _user_can_access_project(session, user, project, ProjectAccess.VIEW):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
 
     url = await storage_service.signed_read_url(
@@ -244,7 +244,7 @@ async def post_approve(
     except EditNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Edit not found") from exc
     project = await _project_for_edit(session, edit)
-    if not _user_can_access_project(user, project, ProjectAccess.VIEW):
+    if not await _user_can_access_project(session, user, project, ProjectAccess.VIEW):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
     await edit_service.approve_edit(session, edit=edit, project=project, actor=user)
     await session.commit()
@@ -268,7 +268,7 @@ async def post_request_changes(
     except EditNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Edit not found") from exc
     project = await _project_for_edit(session, edit)
-    if not _user_can_access_project(user, project, ProjectAccess.VIEW):
+    if not await _user_can_access_project(session, user, project, ProjectAccess.VIEW):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
     try:
         await edit_service.request_changes(
@@ -300,7 +300,7 @@ async def post_edit_comment(
     except EditNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Edit not found") from exc
     project = await _project_for_edit(session, edit)
-    if not _user_can_access_project(user, project, ProjectAccess.VIEW):
+    if not await _user_can_access_project(session, user, project, ProjectAccess.VIEW):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
     comment = await edit_service.add_edit_comment(
         session,
@@ -330,7 +330,7 @@ async def get_edit_comments(
     except EditNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Edit not found") from exc
     project = await _project_for_edit(session, edit)
-    if not _user_can_access_project(user, project, ProjectAccess.VIEW):
+    if not await _user_can_access_project(session, user, project, ProjectAccess.VIEW):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
     comments = await edit_service.list_edit_comments(session, edit_version_id=edit.id)
     return [EditCommentPublic.model_validate(c) for c in comments]
@@ -362,7 +362,7 @@ async def post_resolve_edit_comment(
     session: SessionDep,
 ) -> EditCommentPublic:
     comment, project = await _load_edit_comment_and_project(session, comment_id)
-    if not _user_can_access_project(user, project, ProjectAccess.EDIT):
+    if not await _user_can_access_project(session, user, project, ProjectAccess.EDIT):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
     await edit_service.resolve_edit_comment(
         session, comment=comment, project=project, actor=user
@@ -383,7 +383,7 @@ async def post_reopen_edit_comment(
     session: SessionDep,
 ) -> EditCommentPublic:
     comment, project = await _load_edit_comment_and_project(session, comment_id)
-    if not _user_can_access_project(user, project, ProjectAccess.EDIT):
+    if not await _user_can_access_project(session, user, project, ProjectAccess.EDIT):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
     await edit_service.reopen_edit_comment(
         session, comment=comment, project=project, actor=user

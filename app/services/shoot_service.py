@@ -15,11 +15,35 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.enums import PipelineStage, ShootStatus
+from app.models.enums import ShootStatus
 from app.models.project import ProjectModel
 from app.models.shoot import ShootModel
 from app.models.user import UserModel
-from app.services import activity_service
+from app.services import activity_service, project_service
+
+
+async def _advance_stage(
+    session: AsyncSession,
+    *,
+    project: ProjectModel,
+    target_key: str,
+    actor_id: uuid.UUID,
+) -> None:
+    target_id = await project_service.resolve_stage_id_by_key(
+        session, department_id=project.department_id, key=target_key
+    )
+    if target_id is None or target_id == project.stage_id:
+        return
+    previous_key = project.stage.key
+    project.stage_id = target_id
+    await session.refresh(project, attribute_names=["stage"])
+    await activity_service.record(
+        session,
+        project_id=project.id,
+        actor_id=actor_id,
+        action="project.stage_changed",
+        metadata={"from": previous_key, "to": target_key},
+    )
 
 
 class ShootNotFoundError(Exception):
@@ -160,18 +184,10 @@ async def transition_shoot(
         },
     )
 
-    # Spec §4 row 9: wrap shoot → SHOOT_DONE.
-    if target == ShootStatus.WRAPPED and project.stage == PipelineStage.SHOOT_SCHEDULED:
-        project.stage = PipelineStage.SHOOT_DONE
-        await activity_service.record(
-            session,
-            project_id=project.id,
-            actor_id=actor.id,
-            action="project.stage_changed",
-            metadata={
-                "from": PipelineStage.SHOOT_SCHEDULED.value,
-                "to": PipelineStage.SHOOT_DONE.value,
-            },
+    # Spec §4 row 9: wrap shoot → shoot_done.
+    if target == ShootStatus.WRAPPED and project.stage.key == "shoot_scheduled":
+        await _advance_stage(
+            session, project=project, target_key="shoot_done", actor_id=actor.id
         )
 
     return shoot

@@ -25,6 +25,7 @@ from app.models import connected_google_account as _connected_google_account  # 
 from app.models import department as _department  # noqa: F401
 from app.models import department_membership as _department_membership  # noqa: F401
 from app.models import department_role as _department_role  # noqa: F401
+from app.models import department_event_definition as _department_event_definition  # noqa: F401
 from app.models import department_role_permission as _department_role_permission  # noqa: F401
 from app.models import department_stage as _department_stage  # noqa: F401
 from app.models import department_template as _department_template  # noqa: F401
@@ -38,6 +39,7 @@ from app.models import project as _project  # noqa: F401
 from app.models import script as _script  # noqa: F401
 from app.models import shoot as _shoot  # noqa: F401
 from app.models import user as _user  # noqa: F401
+from app.models import user_notification_pref_event as _user_notification_pref_event  # noqa: F401
 
 config = context.config
 settings = get_settings()

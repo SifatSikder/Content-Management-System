@@ -1,28 +1,38 @@
 "use client";
 
 import { useDroppable } from "@dnd-kit/core";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import { ProjectCard } from "@/features/projects/components/ProjectCard";
+import type { Stage } from "@/features/departments/types";
 import type { Project } from "@/features/projects/types";
-import type { PipelineStage } from "@/lib/enums";
 import { cn } from "@/lib/utils";
 
 interface Props {
-  stage: PipelineStage;
+  stage: Stage;
   projects: Project[];
   canDrop: boolean;
 }
 
+/**
+ * One column on the kanban. The displayed name comes from `stage.name_i18n`
+ * (the department-editable label) with a fall-back to `stage.key` so a
+ * department that just renamed a stage in another language still renders
+ * cleanly. Drop target id is the stage's uuid so the drag handler can
+ * forward it straight to `moveStage({ stage_id })`.
+ */
 export function KanbanColumn({ stage, projects, canDrop }: Props) {
-  const t = useTranslations("stages");
+  const locale = useLocale();
   const tProj = useTranslations("projects");
   const { isOver, setNodeRef } = useDroppable({
-    id: stage,
-    data: { stage },
+    id: stage.id,
+    data: { stageId: stage.id, stageKey: stage.key },
     disabled: !canDrop,
   });
+
+  const label =
+    stage.name_i18n[locale] ?? stage.name_i18n.en ?? stage.name_i18n.nl ?? stage.key;
 
   return (
     <div
@@ -33,7 +43,7 @@ export function KanbanColumn({ stage, projects, canDrop }: Props) {
       )}
     >
       <div className="flex items-center justify-between border-b px-3 py-2">
-        <span className="text-sm font-medium">{t(stage)}</span>
+        <span className="text-sm font-medium">{label}</span>
         <Badge variant="outline" className="text-xs">
           {projects.length}
         </Badge>

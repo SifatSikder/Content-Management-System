@@ -1,51 +1,69 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { fetchPrefs, patchPrefs } from "@/features/notification-prefs/api";
-import type { NotificationPrefs } from "@/features/notification-prefs/types";
+import { useCurrentDepartment } from "@/features/departments/hooks/useCurrentDepartment";
+import { fetchPrefs, patchPref } from "@/features/notification-prefs/api";
+import type { DepartmentPrefs } from "@/features/notification-prefs/types";
 
-const ROWS: { field: keyof NotificationPrefs; i18nKey: string }[] = [
-  { field: "push_project_created", i18nKey: "event_project_created" },
-  { field: "push_script_submitted", i18nKey: "event_script_submitted" },
-  { field: "push_script_locked", i18nKey: "event_script_locked" },
-  { field: "push_cut_uploaded", i18nKey: "event_cut_uploaded" },
-  { field: "push_cut_comment", i18nKey: "event_cut_comment" },
-  { field: "push_cut_approved", i18nKey: "event_cut_approved" },
-  { field: "push_cut_changes_requested", i18nKey: "event_cut_changes_requested" },
-  { field: "push_project_published", i18nKey: "event_project_published" },
-  { field: "push_project_stuck", i18nKey: "event_project_stuck" },
-];
-
+/**
+ * Per-event opt-in/out toggles for the user's current department.
+ *
+ * Phase B switched the underlying schema from a fixed 9-column row to a
+ * department-scoped table. The full settings page (`/settings/notifications`)
+ * called out in the plan would let the user pick between departments —
+ * that's a follow-up; this card just renders the current department's
+ * event list inline on `/settings`.
+ */
 export function NotificationPrefsCard() {
   const t = useTranslations("notification_prefs");
-  const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
-  const [busy, setBusy] = useState<keyof NotificationPrefs | null>(null);
+  const locale = useLocale();
+  const department = useCurrentDepartment();
+  const [prefs, setPrefs] = useState<DepartmentPrefs | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchPrefs().then(setPrefs).catch(() => {
-      toast.error(t("save_failed"));
-    });
-  }, [t]);
+    if (department.status !== "ready" || !department.current) {
+      setPrefs(null);
+      return;
+    }
+    fetchPrefs(department.current.id)
+      .then(setPrefs)
+      .catch(() => toast.error(t("save_failed")));
+  }, [department.status, department.current, t]);
 
-  async function toggle(field: keyof NotificationPrefs, next: boolean) {
-    if (!prefs) return;
-    const optimistic = { ...prefs, [field]: next };
+  async function toggle(eventKey: string, next: boolean) {
+    if (!prefs || !department.current) return;
+    const previous = prefs;
+    const optimistic: DepartmentPrefs = {
+      ...prefs,
+      events: prefs.events.map((e) =>
+        e.event_key === eventKey ? { ...e, enabled: next } : e,
+      ),
+    };
     setPrefs(optimistic);
-    setBusy(field);
+    setBusy(eventKey);
     try {
-      const saved = await patchPrefs({ [field]: next });
+      const saved = await patchPref({
+        department_id: department.current.id,
+        event_key: eventKey,
+        enabled: next,
+      });
       setPrefs(saved);
     } catch {
-      setPrefs(prefs);
+      setPrefs(previous);
       toast.error(t("save_failed"));
     } finally {
       setBusy(null);
     }
+  }
+
+  function label(nameI18n: Record<string, string>, fallback: string): string {
+    return nameI18n[locale] ?? nameI18n.en ?? nameI18n.nl ?? fallback;
   }
 
   return (
@@ -55,21 +73,30 @@ export function NotificationPrefsCard() {
         <CardDescription>{t("description")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-1 text-sm">
-        {prefs === null && (
+        {department.status === "loading" && (
           <p className="text-muted-foreground">{t("loading")}</p>
         )}
-        {prefs !== null && (
+        {department.status === "none" && (
+          <p className="text-muted-foreground">{t("no_department")}</p>
+        )}
+        {prefs === null && department.status === "ready" && (
+          <p className="text-muted-foreground">{t("loading")}</p>
+        )}
+        {prefs !== null && prefs.events.length === 0 && (
+          <p className="text-muted-foreground">{t("no_events")}</p>
+        )}
+        {prefs !== null && prefs.events.length > 0 && (
           <ul className="space-y-1">
-            {ROWS.map(({ field, i18nKey }) => (
+            {prefs.events.map((event) => (
               <li
-                key={field}
+                key={event.event_key}
                 className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5"
               >
-                <span>{t(i18nKey)}</span>
+                <span>{label(event.name_i18n, event.event_key)}</span>
                 <Switch
-                  checked={prefs[field]}
-                  disabled={busy === field}
-                  onCheckedChange={(next) => toggle(field, next)}
+                  checked={event.enabled}
+                  disabled={busy === event.event_key}
+                  onCheckedChange={(next) => toggle(event.event_key, next)}
                 />
               </li>
             ))}

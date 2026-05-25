@@ -103,6 +103,10 @@ openapi: ## export FastAPI OpenAPI schema to openapi.json
 seed: ## seed demo data (idempotent)
 	uv run python scripts/seed_demo.py
 
+.PHONY: seed-templates
+seed-templates: ## upsert department templates from app/seeds/templates/ (idempotent)
+	uv run python scripts/seed_templates.py
+
 # --- Deployment (Phase 5) ---------------------------------------------------
 
 .PHONY: deploy

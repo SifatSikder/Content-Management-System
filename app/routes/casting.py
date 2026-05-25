@@ -114,7 +114,7 @@ async def _load_cast_and_project(
     except CastMemberNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cast member not found") from exc
     project = await _project_for_cast(session, cast)
-    if not _user_can_access_project(user, project, level):
+    if not await _user_can_access_project(session, user, project, level):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
     return cast, project
 

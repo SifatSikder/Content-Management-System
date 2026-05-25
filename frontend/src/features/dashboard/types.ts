@@ -1,9 +1,15 @@
-import type { PipelineStage } from "@/lib/enums";
+/**
+ * Dashboard DTOs.
+ *
+ * `stage` is the department stage *key* (a free-form string) post-Phase-B —
+ * not the legacy `PipelineStage` enum. Components must resolve display names
+ * via the stage's `name_i18n` (see `useDepartmentStages`).
+ */
 
 export interface AwaitingItem {
   project_id: string;
   project_title: string;
-  stage: PipelineStage;
+  stage: string;
   cut_id: string;
   cut_version: number;
   uploaded_at: string;
@@ -11,14 +17,14 @@ export interface AwaitingItem {
 }
 
 export interface StageCount {
-  stage: PipelineStage;
+  stage: string;
   count: number;
 }
 
 export interface StuckProject {
   project_id: string;
   project_title: string;
-  stage: PipelineStage;
+  stage: string;
   owner_id: string;
   owner_name: string;
   last_activity_at: string | null;
@@ -31,7 +37,7 @@ export interface ThroughputBucket {
 }
 
 export interface TimeInStage {
-  stage: PipelineStage;
+  stage: string;
   sample_size: number;
   avg_days: number | null;
   max_days: number | null;

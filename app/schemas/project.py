@@ -7,7 +7,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.enums import Category, PipelineStage
+from app.models.enums import Category
 
 
 class OwnerPublic(BaseModel):
@@ -20,13 +20,45 @@ class OwnerPublic(BaseModel):
     avatar_url: str | None = None
 
 
+class StagePublic(BaseModel):
+    """Embedded stage view — what the kanban column needs to render."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    key: str
+    name_i18n: dict[str, str]
+    order_index: int
+    is_terminal: bool
+    color: str | None = None
+
+
+class DepartmentEmbed(BaseModel):
+    """Minimal department projection inlined on a project response.
+
+    Just `capabilities` + the i18n-friendly identifiers — saves the
+    frontend a second round-trip per project page when it needs to know
+    which capability tabs to render.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    slug: str
+    capabilities: list[str]
+
+
 class CreateProjectBody(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     category: Category
+    department_id: uuid.UUID
     description: str | None = None
     due_date: date | None = None
     # Optional override — only honoured for admins. Defaults to current_user.
     owner_id: uuid.UUID | None = None
+    # Optional: pick a stage other than the department's entry stage (rare).
+    stage_id: uuid.UUID | None = None
 
 
 class UpdateProjectBody(BaseModel):
@@ -39,7 +71,10 @@ class UpdateProjectBody(BaseModel):
 
 
 class MoveStageBody(BaseModel):
-    stage: PipelineStage
+    """Either `stage_id` (preferred) or `stage_key` (legacy)."""
+
+    stage_id: uuid.UUID | None = None
+    stage_key: str | None = None
 
 
 class ProjectPublic(BaseModel):
@@ -49,7 +84,11 @@ class ProjectPublic(BaseModel):
     title: str
     description: str | None
     category: Category
-    stage: PipelineStage
+    business_id: uuid.UUID
+    department_id: uuid.UUID
+    stage_id: uuid.UUID
+    stage: StagePublic
+    department: DepartmentEmbed
     owner_id: uuid.UUID
     owner: OwnerPublic
     due_date: date | None
@@ -69,9 +108,11 @@ class ProjectListResponse(BaseModel):
 
 __all__ = [
     "CreateProjectBody",
+    "DepartmentEmbed",
     "MoveStageBody",
     "OwnerPublic",
     "ProjectListResponse",
     "ProjectPublic",
+    "StagePublic",
     "UpdateProjectBody",
 ]

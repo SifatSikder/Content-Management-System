@@ -1,14 +1,16 @@
 import { apiFetchAuthed } from "@/lib/api-client";
 
-import type { NotificationPrefs, NotificationPrefsPatch } from "./types";
+import type { DepartmentPrefs, SetEventPrefBody } from "./types";
 
-export function fetchPrefs(): Promise<NotificationPrefs> {
-  return apiFetchAuthed<NotificationPrefs>("/me/notification-prefs");
+export function fetchPrefs(departmentId: string): Promise<DepartmentPrefs> {
+  return apiFetchAuthed<DepartmentPrefs>(
+    `/me/notification-prefs?department_id=${encodeURIComponent(departmentId)}`,
+  );
 }
 
-export function patchPrefs(patch: NotificationPrefsPatch): Promise<NotificationPrefs> {
-  return apiFetchAuthed<NotificationPrefs>("/me/notification-prefs", {
+export function patchPref(body: SetEventPrefBody): Promise<DepartmentPrefs> {
+  return apiFetchAuthed<DepartmentPrefs>("/me/notification-prefs", {
     method: "PATCH",
-    body: patch as unknown as BodyInit,
+    body: body as unknown as BodyInit,
   });
 }

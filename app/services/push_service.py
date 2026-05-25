@@ -112,21 +112,32 @@ async def notify_user(
     user_id: uuid.UUID,
     payload: dict[str, Any],
     event_key: str | None = None,
+    department_id: uuid.UUID | None = None,
 ) -> int:
     """Enqueue a push job per active subscription. Returns the count
     enqueued. Best-effort — Redis failures don't raise here (handled by
     queue_service.enqueue).
 
-    When `event_key` is provided, the user's notification preferences gate
-    delivery — a muted event returns 0 without touching Redis. Callers that
-    don't pass `event_key` (e.g. ad-hoc test pings) bypass the gate.
+    When `event_key` AND `department_id` are provided, the user's
+    notification preference for that `(department, event)` pair gates
+    delivery — a muted event returns 0 without touching Redis. Callers
+    that omit either argument (e.g. ad-hoc test pings, cross-department
+    system notifications) bypass the gate entirely.
     """
-    if event_key is not None:
+    if event_key is not None and department_id is not None:
         enabled = await notification_prefs_service.is_event_enabled(
-            session, user_id=user_id, event_key=event_key
+            session,
+            user_id=user_id,
+            department_id=department_id,
+            event_key=event_key,
         )
         if not enabled:
-            log.info("push_skipped_muted", user_id=str(user_id), event_key=event_key)
+            log.info(
+                "push_skipped_muted",
+                user_id=str(user_id),
+                department_id=str(department_id),
+                event_key=event_key,
+            )
             return 0
 
     subs = await list_subscriptions_for_user(session, user_id=user_id)

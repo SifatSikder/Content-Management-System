@@ -1,38 +1,34 @@
-"""DTOs for /me/notification-prefs (Phase 3 Task 3.5)."""
+"""DTOs for /me/notification-prefs (Phase B).
+
+Reflects the new department-scoped shape: events are grouped per
+department; each entry carries the user's current effective `enabled`
+value (override-or-default) plus the department default so the settings
+UI can show "Default: on" / "You overrode this" hints.
+"""
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+import uuid
+
+from pydantic import BaseModel, Field
 
 
-class NotificationPrefsPublic(BaseModel):
-    """All boolean toggles for the calling user. Defaults are all `True`."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    push_project_created: bool
-    push_script_submitted: bool
-    push_script_locked: bool
-    push_cut_uploaded: bool
-    push_cut_comment: bool
-    push_cut_approved: bool
-    push_cut_changes_requested: bool
-    push_project_published: bool
-    push_project_stuck: bool
+class EventPrefPublic(BaseModel):
+    event_key: str
+    name_i18n: dict[str, str]
+    default_enabled: bool
+    enabled: bool
 
 
-class NotificationPrefsPatch(BaseModel):
-    """PATCH body — every field optional; only included ones are updated."""
-
-    push_project_created: bool | None = None
-    push_script_submitted: bool | None = None
-    push_script_locked: bool | None = None
-    push_cut_uploaded: bool | None = None
-    push_cut_comment: bool | None = None
-    push_cut_approved: bool | None = None
-    push_cut_changes_requested: bool | None = None
-    push_project_published: bool | None = None
-    push_project_stuck: bool | None = None
+class DepartmentPrefsPublic(BaseModel):
+    department_id: uuid.UUID
+    events: list[EventPrefPublic]
 
 
-__all__ = ["NotificationPrefsPatch", "NotificationPrefsPublic"]
+class SetEventPrefBody(BaseModel):
+    department_id: uuid.UUID
+    event_key: str = Field(min_length=1, max_length=64)
+    enabled: bool
+
+
+__all__ = ["DepartmentPrefsPublic", "EventPrefPublic", "SetEventPrefBody"]

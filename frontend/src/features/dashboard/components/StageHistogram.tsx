@@ -15,16 +15,21 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchStages } from "@/features/dashboard/api";
 import type { StageCount } from "@/features/dashboard/types";
+import { useStageLabel } from "@/features/departments/hooks/useStageLabel";
 
-export function StageHistogram() {
+interface Props {
+  departmentId: string;
+}
+
+export function StageHistogram({ departmentId }: Props) {
   const t = useTranslations("dashboard");
-  const tStages = useTranslations("stages");
+  const stageLabel = useStageLabel(departmentId);
   const [data, setData] = useState<StageCount[] | null>(null);
   const [err, setErr] = useState(false);
 
   useEffect(() => {
-    fetchStages().then(setData).catch(() => setErr(true));
-  }, []);
+    fetchStages(departmentId).then(setData).catch(() => setErr(true));
+  }, [departmentId]);
 
   return (
     <Card>
@@ -43,7 +48,7 @@ export function StageHistogram() {
               <BarChart
                 data={data.map((row) => ({
                   ...row,
-                  label: tStages(row.stage),
+                  label: stageLabel(row.stage),
                 }))}
                 margin={{ top: 8, right: 16, left: 0, bottom: 48 }}
               >

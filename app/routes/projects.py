@@ -1,7 +1,8 @@
 """Project endpoints.
 
 All routes are JWT-authenticated. Mutation routes are role/access-gated using
-`app.auth.dependencies`. Stage moves additionally check `can_user_move_to_stage`.
+`app.auth.dependencies`. Stage moves additionally check
+`permission_service.can_user_move_to_stage`.
 """
 
 from __future__ import annotations
@@ -10,17 +11,19 @@ import uuid
 from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import select
 
 from app.auth.dependencies import (
     CurrentUser,
     ProjectAccess,
     SessionDep,
-    can_user_move_to_stage,
     require_project_access,
     require_role,
 )
-from app.models.enums import PipelineStage, Role
+from app.models.department import DepartmentModel
+from app.models.department_stage import DepartmentStageModel
+from app.models.enums import Role
 from app.models.project import ProjectModel
 from app.schemas.activity import ActivityListResponse, ActivityPublic
 from app.schemas.project import (
@@ -30,7 +33,7 @@ from app.schemas.project import (
     ProjectPublic,
     UpdateProjectBody,
 )
-from app.services import activity_service, project_service
+from app.services import activity_service, permission_service, project_service
 from app.services.activity_service import (
     DEFAULT_ACTIVITY_PAGE_SIZE,
     MAX_ACTIVITY_PAGE_SIZE,
@@ -41,6 +44,7 @@ from app.services.project_service import (
     MAX_PAGE_SIZE,
     InvalidCursorError,
     ListFilters,
+    StageNotFoundError,
 )
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -61,15 +65,28 @@ async def post_project(
     user: Annotated[CurrentUser, Depends(CreatorRoles)],
     session: SessionDep,
 ) -> ProjectPublic:
-    project = await project_service.create_project(
-        session,
-        actor=user,
-        title=body.title,
-        category=body.category,
-        description=body.description,
-        due_date=body.due_date,
-        owner_id_override=body.owner_id,
-    )
+    # The business context middleware already validates that the user has
+    # access to this business; we still need to resolve the department's
+    # business_id for the new project's denormalised business_id column.
+    department = await session.get(DepartmentModel, body.department_id)
+    if department is None or department.archived_at is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Department not found")
+
+    try:
+        project = await project_service.create_project(
+            session,
+            actor=user,
+            title=body.title,
+            category=body.category,
+            business_id=department.business_id,
+            department_id=department.id,
+            description=body.description,
+            due_date=body.due_date,
+            owner_id_override=body.owner_id,
+            stage_id=body.stage_id,
+        )
+    except StageNotFoundError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     await session.commit()
     await session.refresh(project)
     return ProjectPublic.model_validate(project)
@@ -79,7 +96,7 @@ async def post_project(
 async def get_projects(
     user: CurrentUser,
     session: SessionDep,
-    stage: PipelineStage | None = None,
+    stage: Annotated[str | None, Query(description="Stage key (e.g. 'idea')")] = None,
     owner_id: uuid.UUID | None = None,
     filter: Annotated[str | None, Query(pattern="^mine$")] = None,
     cursor: str | None = None,
@@ -89,7 +106,7 @@ async def get_projects(
         items, next_cursor = await project_service.list_projects(
             session,
             user=user,
-            filters=ListFilters(stage=stage, owner_id=owner_id, mine=filter == "mine"),
+            filters=ListFilters(stage_key=stage, owner_id=owner_id, mine=filter == "mine"),
             cursor=cursor,
             limit=limit,
         )
@@ -140,23 +157,64 @@ async def post_project_stage(
     project: Annotated[ProjectModel, Depends(require_project_access(ProjectAccess.VIEW))],
     user: CurrentUser,
     session: SessionDep,
+    request: Request,
 ) -> ProjectPublic:
-    if not can_user_move_to_stage(user, project, body.stage):
+    target_stage_id = await _resolve_target_stage_id(session, project, body)
+    if target_stage_id is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Unknown target stage for this department"
+        )
+
+    allowed = await permission_service.can_user_move_to_stage(
+        session,
+        user=user,
+        project=project,
+        target_stage_id=target_stage_id,
+        request=request,
+    )
+    if not allowed:
         log.warning(
             "stage_move_denied",
             user_id=str(user.id),
             user_role=user.role.value,
             project_id=str(project.id),
-            target_stage=body.stage.value,
+            target_stage_id=str(target_stage_id),
         )
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not allowed to move to that stage")
 
-    await project_service.move_stage(
-        session, actor=user, project=project, target_stage=body.stage
-    )
+    try:
+        await project_service.move_stage(
+            session, actor=user, project=project, target_stage_id=target_stage_id
+        )
+    except StageNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     await session.commit()
     await session.refresh(project)
     return ProjectPublic.model_validate(project)
+
+
+async def _resolve_target_stage_id(
+    session: SessionDep, project: ProjectModel, body: MoveStageBody
+) -> uuid.UUID | None:
+    """Resolve `MoveStageBody` to a concrete stage id inside the project's
+    department.
+
+      * If `stage_id` is set, validate it belongs to the department.
+      * Else, resolve `stage_key` against the department's stages.
+    """
+    if body.stage_id is not None:
+        result = await session.execute(
+            select(DepartmentStageModel.id).where(
+                DepartmentStageModel.id == body.stage_id,
+                DepartmentStageModel.department_id == project.department_id,
+            )
+        )
+        return result.scalar_one_or_none()
+    if body.stage_key is not None:
+        return await project_service.resolve_stage_id_by_key(
+            session, department_id=project.department_id, key=body.stage_key
+        )
+    return None
 
 
 @router.delete(
