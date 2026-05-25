@@ -23,9 +23,9 @@ from app.models import business_membership as _business_membership  # noqa: F401
 from app.models import cast_member as _cast_member  # noqa: F401
 from app.models import connected_google_account as _connected_google_account  # noqa: F401
 from app.models import department as _department  # noqa: F401
+from app.models import department_event_definition as _department_event_definition  # noqa: F401
 from app.models import department_membership as _department_membership  # noqa: F401
 from app.models import department_role as _department_role  # noqa: F401
-from app.models import department_event_definition as _department_event_definition  # noqa: F401
 from app.models import department_role_permission as _department_role_permission  # noqa: F401
 from app.models import department_stage as _department_stage  # noqa: F401
 from app.models import department_template as _department_template  # noqa: F401

@@ -177,19 +177,9 @@ def _build_permissions() -> list[dict[str, Any]]:
     return rows
 
 
-# ---------- capability config + terminology -----------------------------
-# Phase C lets templates carry per-capability config + UI terminology
-# overrides so a single capability key can render differently across
-# templates. `participant_roster` here is in "lead" mode — the form should
-# render display_name + email + phone + source + notes, no casting affordances.
-
-_CAPABILITY_CONFIGS: dict[str, dict[str, Any]] = {
-    "participant_roster": {
-        "kind": "lead",
-        # The frontend's lead form renders exactly these fields in this order.
-        "visible_fields": ["display_name", "email", "phone", "source", "notes"],
-    },
-}
+# ---------- terminology --------------------------------------------------
+# Templates carry UI terminology overrides so generic nouns render the
+# right label per template ("Lead" vs "Project").
 
 _TERMINOLOGY: dict[str, dict[str, str]] = {
     # Each entry maps a generic noun to its in-context label, per locale.
@@ -206,12 +196,11 @@ TEMPLATE: dict[str, Any] = {
     "key": "marketing",
     "name": "Marketing",
     "description": (
-        "Outbound sales funnel. 6 stages (new lead → won/lost), 3 roles, "
-        "and the `participant_roster` capability reused as a lead list."
+        "Outbound sales funnel. 6 stages (new lead → won/lost), 3 roles. "
+        "The participant_roster tab renders in lead mode via the hardcoded "
+        "template_key → tabs map on the frontend."
     ),
     "is_system": True,
-    "default_capabilities": ["participant_roster"],
-    "default_capability_configs": _CAPABILITY_CONFIGS,
     "default_terminology": _TERMINOLOGY,
     "default_stages": _STAGES,
     "default_roles": _ROLES,

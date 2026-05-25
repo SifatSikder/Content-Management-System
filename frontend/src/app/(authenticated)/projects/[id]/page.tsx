@@ -9,9 +9,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ActivityFeed } from "@/features/activity/components/ActivityFeed";
 import { useAuth } from "@/features/auth/hooks/useAuth";
-import { enabledCapabilities } from "@/features/capabilities/registry";
 import { useTerminology } from "@/features/departments/hooks/useTerminology";
 import { BriefTab } from "@/features/projects/components/BriefTab";
+import { tabsForTemplate } from "@/features/projects/lib/projectTabs";
 import { getProject } from "@/features/projects/api";
 import type { Project } from "@/features/projects/types";
 import { ApiError } from "@/lib/api-client";
@@ -19,7 +19,7 @@ import { ApiError } from "@/lib/api-client";
 /**
  * Safe i18n lookup. next-intl throws on missing keys in dev (and renders
  * the key path in prod), so for dynamic capability labels we wrap the call
- * and fall back to the registry's English `name`.
+ * and fall back to the entry's English `name`.
  */
 function tabLabel(
   t: (key: string) => string,
@@ -34,14 +34,10 @@ function tabLabel(
 }
 
 /**
- * Project detail page. The tab set is dynamic: it's the intersection of
- * `project.department.capabilities` (JSONB array of capability keys) and the
- * frontend capability registry (`features/capabilities/registry.ts`).
- *
- * A department that disables a capability hides the tab but keeps the
- * backend route reachable for any in-flight UI state; the backend's
- * `require_capability` dependency 404s the underlying endpoints when the
- * dependency is wired up, so the user can't sneak around the disabled tab.
+ * Project detail page. The tab set is fixed by the department's
+ * `template_key` (Content Creation, Marketing, …) per
+ * `TABS_BY_TEMPLATE` in `features/projects/lib/projectTabs.ts`. Brief and
+ * Activity are universal and bracket the per-template tabs.
  */
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
@@ -102,7 +98,7 @@ export default function ProjectDetailPage() {
     project.stage.name_i18n.en ??
     project.stage.name_i18n.nl ??
     project.stage.key;
-  const capabilities = enabledCapabilities(project.department.capabilities);
+  const tabs = tabsForTemplate(project.department.template_key);
   const briefTabLabel = noun("tab_brief", tDetail("tab_brief"));
 
   return (
@@ -121,7 +117,7 @@ export default function ProjectDetailPage() {
       <Tabs defaultValue="brief" className="flex flex-1 flex-col">
         <TabsList className="bg-muted/30 mx-4 mt-4 flex w-fit gap-1 overflow-x-auto md:mx-6">
           <TabsTrigger value="brief">{briefTabLabel}</TabsTrigger>
-          {capabilities.map((cap) => (
+          {tabs.map((cap) => (
             <TabsTrigger key={cap.key} value={cap.key}>
               {tabLabel(tDetail, cap.tabLabelKey, cap.name)}
             </TabsTrigger>
@@ -137,7 +133,7 @@ export default function ProjectDetailPage() {
             onUpdated={setProject}
           />
         </TabsContent>
-        {capabilities.map((cap) => {
+        {tabs.map((cap) => {
           const role = auth.user!.role;
           return (
             <TabsContent key={cap.key} value={cap.key} className="px-4 py-4 md:px-6">

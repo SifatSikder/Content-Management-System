@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -21,8 +20,6 @@ class DepartmentTemplatePublic(BaseModel):
     key: str
     name: str
     description: str | None = None
-    default_capabilities: list[str]
-    default_capability_configs: dict[str, dict[str, Any]] = Field(default_factory=dict)
     default_terminology: dict[str, dict[str, str]] = Field(default_factory=dict)
     is_system: bool
     created_at: datetime
@@ -44,7 +41,6 @@ class CreateDepartmentBody(BaseModel):
 
 class UpdateDepartmentBody(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
-    capabilities: list[str] | None = None
 
 
 class DepartmentPublic(BaseModel):
@@ -55,8 +51,6 @@ class DepartmentPublic(BaseModel):
     template_key: str | None = None
     name: str
     slug: str
-    capabilities: list[str]
-    capability_configs: dict[str, dict[str, Any]] = Field(default_factory=dict)
     terminology: dict[str, dict[str, str]] = Field(default_factory=dict)
     archived_at: datetime | None = None
     created_at: datetime
@@ -76,12 +70,11 @@ class MeDepartmentEntry(BaseModel):
     slug: str
     role_key: str | None = None
     role_name_i18n: dict[str, str] | None = None
-    # Phase C: surface the department's terminology + capability configs so
-    # pages like /projects that only have a MeDepartmentEntry in hand can
-    # still render context-aware labels ("New lead" vs "New project")
-    # without a follow-up GET /departments/{id}.
+    template_key: str | None = None
+    # Surface the department's terminology so pages like /projects that
+    # only have a MeDepartmentEntry in hand can render context-aware labels
+    # ("New lead" vs "New project") without a follow-up GET /departments/{id}.
     terminology: dict[str, dict[str, str]] = Field(default_factory=dict)
-    capability_configs: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
 class MeDepartmentsResponse(BaseModel):

@@ -11,7 +11,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import text
 
-from app.capabilities import registry as capability_registry
 from app.config import Settings, get_settings
 from app.core.business_context import BusinessContextMiddleware
 from app.core.exceptions import register_exception_handlers
@@ -20,6 +19,7 @@ from app.core.middleware import RequestIDMiddleware
 from app.core.rate_limit import limiter, rate_limit_handler
 from app.models.base import dispose_engine, get_sessionmaker
 from app.routes import (
+    asset_review_with_timecodes,
     auth,
     business_memberships,
     businesses,
@@ -30,11 +30,15 @@ from app.routes import (
     department_stages,
     departments,
     drive,
+    event_scheduling,
     health,
+    location_scouting,
     me,
     notification_prefs,
+    participant_roster,
     projects,
     push,
+    script_versioning,
 )
 
 log = structlog.get_logger(__name__)
@@ -47,7 +51,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Start-up:
       * warm the async DB pool (fail fast if DB unreachable)
       * validate settings (Pydantic does this at import, but we log the env)
-      * log the capability registry so misconfigurations are visible early
     Shutdown:
       * dispose the engine
     """
@@ -56,7 +59,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         "app_startup",
         env=settings.app_env,
         base_url=settings.app_base_url,
-        capabilities=[c.key for c in capability_registry.all_capabilities()],
     )
 
     # Warm DB pool — surface bad DB URLs immediately.
@@ -131,14 +133,21 @@ def create_app() -> FastAPI:
     app.include_router(department_memberships.router)
     app.include_router(me.router)
 
-    # --- Capability routers (Phase B) -----------------------------------
-    # Every registered capability ships its routers regardless of whether
-    # any department has it enabled — the per-route `require_capability`
-    # dependency does the actual gating per-project. This keeps the URL
-    # surface stable as departments enable/disable capabilities at runtime.
-    for capability in capability_registry.all_capabilities():
-        for router in capability.routers:
-            app.include_router(router)
+    # --- Per-template feature routers ------------------------------------
+    # Mounted unconditionally; the frontend's tab routing decides which UI
+    # surfaces are reachable per department template (see
+    # frontend/src/features/projects/lib/projectTabs.ts). RLS + dept
+    # membership still protect data on the backend.
+    app.include_router(script_versioning.projects_router)
+    app.include_router(script_versioning.scripts_router)
+    app.include_router(asset_review_with_timecodes.projects_router)
+    app.include_router(asset_review_with_timecodes.edits_router)
+    app.include_router(location_scouting.projects_router)
+    app.include_router(location_scouting.locations_router)
+    app.include_router(participant_roster.projects_router)
+    app.include_router(participant_roster.cast_router)
+    app.include_router(event_scheduling.projects_router)
+    app.include_router(event_scheduling.shoots_router)
 
     return app
 

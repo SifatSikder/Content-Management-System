@@ -85,10 +85,8 @@ export function DepartmentList({
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-muted-foreground text-xs">
-                    {d.capabilities.length === 0
-                      ? t("no_capabilities")
-                      : t("capabilities_count", { count: d.capabilities.length })}
+                  <div className="text-muted-foreground font-mono text-xs">
+                    {d.template_key ?? "—"}
                   </div>
                 </CardContent>
               </Card>

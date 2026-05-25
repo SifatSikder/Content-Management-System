@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, UniqueConstraint
@@ -60,7 +59,7 @@ class BusinessMembershipModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # `lazy="raise"` keeps callers honest — `list_memberships` selectinloads
     # the relation; anything that forgets explodes loudly instead of doing
     # an N+1 query.
-    user: Mapped["UserModel"] = relationship(
+    user: Mapped[UserModel] = relationship(
         "UserModel", foreign_keys=[user_id], lazy="raise"
     )
 

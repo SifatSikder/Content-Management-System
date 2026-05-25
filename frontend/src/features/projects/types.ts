@@ -20,18 +20,15 @@ export interface ProjectStage {
 }
 
 /**
- * Minimal department embed on a project response — surfaces `capabilities`
- * + the Phase C `capability_configs` + `terminology` JSONB so the project
- * detail page can decide which capability tabs to render, how each tab
- * should look, and what labels to use ("Lead" vs "Project") without a
- * second round-trip. Mirrors `app/schemas/project.py::DepartmentEmbed`.
+ * Minimal department embed on a project response — surfaces `template_key`
+ * (drives the per-template tab map) + `terminology` (per-noun i18n
+ * overrides). Mirrors `app/schemas/project.py::DepartmentEmbed`.
  */
 export interface ProjectDepartment {
   id: string;
   name: string;
   slug: string;
-  capabilities: string[];
-  capability_configs: Record<string, Record<string, unknown>>;
+  template_key: string | null;
   terminology: Record<string, Record<string, string>>;
 }
 

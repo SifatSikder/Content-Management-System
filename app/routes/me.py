@@ -117,8 +117,8 @@ async def get_my_departments(
                 slug=d.slug,
                 role_key=None,
                 role_name_i18n=None,
+                template_key=d.template_key,
                 terminology=d.terminology or {},
-                capability_configs=d.capability_configs or {},
             )
             for d in result.scalars().all()
         ]
@@ -149,8 +149,8 @@ async def get_my_departments(
             slug=d.slug,
             role_key=role_key,
             role_name_i18n=role_name_i18n,
+            template_key=d.template_key,
             terminology=d.terminology or {},
-            capability_configs=d.capability_configs or {},
         )
         for d, role_key, role_name_i18n in rows.all()
     ]

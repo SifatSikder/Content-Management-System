@@ -137,20 +137,14 @@ async def create_department(
         counter += 1
         candidate = f"{base_slug}-{counter}"
 
-    capabilities: list[str] = []
-    capability_configs: dict[str, dict[str, Any]] = {}
     terminology: dict[str, dict[str, str]] = {}
     seed_stages: list[dict[str, Any]] = []
     seed_roles: list[dict[str, Any]] = []
     seed_role_permissions: list[dict[str, Any]] = []
     if template_key is not None:
         template = await _load_template(session, key=template_key)
-        capabilities = list(template.default_capabilities or [])
-        # Copy per-capability config + terminology so later template edits
-        # don't retroactively mutate live departments.
-        capability_configs = dict(
-            getattr(template, "default_capability_configs", None) or {}
-        )
+        # Copy terminology so later template edits don't retroactively
+        # mutate live departments.
         terminology = dict(getattr(template, "default_terminology", None) or {})
         seed_stages = list(template.default_stages or [])
         seed_roles = list(template.default_roles or [])
@@ -166,8 +160,6 @@ async def create_department(
         template_key=template_key,
         name=name,
         slug=candidate,
-        capabilities=capabilities,
-        capability_configs=capability_configs,
         terminology=terminology,
     )
     session.add(department)
@@ -288,12 +280,9 @@ async def update_department(
     *,
     department: DepartmentModel,
     name: str | None = None,
-    capabilities: list[str] | None = None,
 ) -> DepartmentModel:
     if name is not None and name != department.name:
         department.name = name
-    if capabilities is not None:
-        department.capabilities = list(capabilities)
     await session.flush()
     return department
 

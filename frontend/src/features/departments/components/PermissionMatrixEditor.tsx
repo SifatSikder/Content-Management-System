@@ -25,8 +25,8 @@ import { ApiError } from "@/lib/api-client";
  *
  * Every action available in this department renders as a toggleable row,
  * not just the ones already persisted. The available set comes from
- * `availableActionKeys(capabilities, stages)` — project actions + the
- * action keys declared by each enabled capability + every stage transition
+ * `availableActionKeys(template_key, stages)` — project actions + the
+ * action keys this department template ships + every stage transition
  * the workflow allows. Rows that don't yet have a `(role, action)` row in
  * the DB show as off and only get a row when toggled on. Persisted rows
  * whose key isn't in the available set (e.g. a backend action the
@@ -86,7 +86,7 @@ export function PermissionMatrixEditor({
     const seen = new Set<string>();
     const merged: { key: string; perm: Permission | null }[] = [];
 
-    for (const key of availableActionKeys(department.capabilities, stages)) {
+    for (const key of availableActionKeys(department.template_key, stages)) {
       if (seen.has(key)) continue;
       seen.add(key);
       merged.push({ key, perm: persisted.get(key) ?? null });
@@ -123,7 +123,7 @@ export function PermissionMatrixEditor({
       const bucket = buckets.get(key);
       return bucket ? [{ key, ...bucket }] : [];
     });
-  }, [rows, resolveStage, department.capabilities, stages]);
+  }, [rows, resolveStage, department.template_key, stages]);
 
   async function toggle(actionKey: string, next: boolean) {
     setPendingKey(actionKey);

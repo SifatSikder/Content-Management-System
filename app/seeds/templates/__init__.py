@@ -1,13 +1,13 @@
 """Registry of department templates.
 
-Each module in this package defines a single template dict with the structure:
+Each module in this package defines a single template dict:
 
     TEMPLATE = {
         "key": "content_creation",
         "name": "Content Creation",
         "description": "...",
         "is_system": True,
-        "default_capabilities": ["script_versioning", ...],
+        "default_terminology": {"project": {"en": "Project", "nl": "Project"}, ...},
         "default_stages": [
             {"key": "idea", "name_i18n": {"nl": "...", "en": "..."},
              "order_index": 0, "is_terminal": False, "color": "#…",
@@ -31,6 +31,9 @@ template is instantiated into a department (see
 `default_role_permissions` is also template-only — the live row is in
 `department_role_permissions` (keyed by `(role_id, action_key)`), seeded at
 instantiation time.
+
+The set of tabs each template exposes lives in the frontend
+(`frontend/src/features/projects/lib/projectTabs.ts`), not here.
 """
 
 from __future__ import annotations

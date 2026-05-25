@@ -60,8 +60,8 @@ class DepartmentMembershipModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # `lazy="raise"` keeps callers honest — `list_department_memberships`
     # selectinloads both relations; anything that forgets explodes loudly
     # instead of silently issuing N+1 queries.
-    user: Mapped["UserModel"] = relationship("UserModel", lazy="raise")
-    role: Mapped["DepartmentRoleModel"] = relationship(
+    user: Mapped[UserModel] = relationship("UserModel", lazy="raise")
+    role: Mapped[DepartmentRoleModel] = relationship(
         "DepartmentRoleModel", lazy="raise"
     )
 

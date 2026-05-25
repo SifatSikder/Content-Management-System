@@ -246,22 +246,7 @@ def _build_permissions() -> list[dict[str, Any]]:
     return rows
 
 
-# ---------- capability config + terminology -----------------------------
-# `participant_roster` in this template is in "cast" mode — render the
-# existing cast form (name, role description, contact, release form, etc.).
-
-_CAPABILITY_CONFIGS: dict[str, dict[str, Any]] = {
-    "participant_roster": {
-        "kind": "cast",
-        "visible_fields": [
-            "name",
-            "role_description",
-            "contact_email",
-            "contact_phone",
-            "release_form",
-        ],
-    },
-}
+# ---------- terminology --------------------------------------------------
 
 # Terminology defaults: empty → frontend falls back to the legacy
 # `project_detail.*` i18n strings ("Project", "New project", "Cast member").
@@ -272,19 +257,11 @@ TEMPLATE: dict[str, Any] = {
     "key": "content_creation",
     "name": "Content Creation",
     "description": (
-        "Idea → published video pipeline. 11 stages, 6 roles, "
-        "5 capabilities (script versioning, asset review with timecodes, "
-        "location scouting, participant roster, event scheduling)."
+        "Idea → published video pipeline. 11 stages, 6 roles. Feature tabs "
+        "are hardcoded in `frontend/src/features/projects/lib/projectTabs.ts` "
+        "(Script, Locations, Casting, Shoots, Edits)."
     ),
     "is_system": True,
-    "default_capabilities": [
-        "script_versioning",
-        "asset_review_with_timecodes",
-        "location_scouting",
-        "participant_roster",
-        "event_scheduling",
-    ],
-    "default_capability_configs": _CAPABILITY_CONFIGS,
     "default_terminology": _TERMINOLOGY,
     "default_stages": _STAGES,
     "default_roles": _ROLES,

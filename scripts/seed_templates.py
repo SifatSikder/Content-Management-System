@@ -40,18 +40,18 @@ async def upsert_templates() -> int:
                 key=tpl["key"],
                 name=tpl["name"],
                 description=tpl.get("description"),
-                default_capabilities=tpl.get("default_capabilities", []),
                 default_stages=tpl.get("default_stages", []),
                 default_roles=tpl.get("default_roles", []),
+                default_terminology=tpl.get("default_terminology", {}),
                 is_system=bool(tpl.get("is_system", False)),
             ).on_conflict_do_update(
                 index_elements=[DepartmentTemplateModel.key],
                 set_={
                     "name": tpl["name"],
                     "description": tpl.get("description"),
-                    "default_capabilities": tpl.get("default_capabilities", []),
                     "default_stages": tpl.get("default_stages", []),
                     "default_roles": tpl.get("default_roles", []),
+                    "default_terminology": tpl.get("default_terminology", {}),
                     "is_system": bool(tpl.get("is_system", False)),
                 },
             )

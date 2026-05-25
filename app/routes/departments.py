@@ -132,7 +132,7 @@ async def get_department(
 @department_router.patch(
     "/{department_id}",
     response_model=DepartmentPublic,
-    summary="Rename or edit the capabilities array",
+    summary="Rename a department",
 )
 async def patch_department(
     department_id: uuid.UUID,
@@ -153,7 +153,6 @@ async def patch_department(
         session,
         department=department,
         name=body.name,
-        capabilities=body.capabilities,
     )
     await session.commit()
     await session.refresh(department)

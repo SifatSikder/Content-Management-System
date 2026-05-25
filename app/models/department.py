@@ -2,21 +2,20 @@
 
 A department is created either from a `DepartmentTemplateModel` (most common
 path: pick "Content Creation", get pre-populated stages + roles) or empty.
-The `template_key` is kept as a string mirror after creation for analytics
-only — the template's defaults are *copied* into per-department rows so
-upstream template edits never mutate live departments.
+The `template_key` is kept as a string mirror after creation — the
+frontend reads it to decide which tab set + permission-action set this
+department exposes (`features/projects/lib/projectTabs.ts`,
+`features/departments/lib/permissionActionsByTemplate.ts`). The template's
+defaults are *copied* into per-department rows so upstream template edits
+never mutate live departments.
 
-`capabilities` is an editable JSONB array of capability keys (e.g.
-`["script_versioning", "asset_review_with_timecodes"]`); the registry in
-`app/capabilities/registry.py` maps each key to a backend router + frontend
-tab. Archived departments stay queryable for history but are hidden in the UI.
+Archived departments stay queryable for history but are hidden in the UI.
 """
 
 from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Any
 
 from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
@@ -42,15 +41,6 @@ class DepartmentModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     slug: Mapped[str] = mapped_column(String(120), nullable=False)
 
-    capabilities: Mapped[list[str]] = mapped_column(
-        JSONB, nullable=False, default=list, server_default="[]"
-    )
-    # Per-capability config copied from the template at instantiation. Shape:
-    # `{capability_key: {kind, visible_fields, …}}`. Phase C uses this to
-    # let `participant_roster` render a cast form vs a lead form.
-    capability_configs: Mapped[dict[str, dict[str, Any]]] = mapped_column(
-        JSONB, nullable=False, default=dict, server_default="{}"
-    )
     # Per-noun label overrides copied from the template. Shape:
     # `{noun: {locale: label}}`. Used by the frontend `useDepartmentTerminology`
     # hook to render context-aware labels (e.g. "New lead" vs "New project").

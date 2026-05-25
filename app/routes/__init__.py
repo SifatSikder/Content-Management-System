@@ -1,9 +1,8 @@
-"""FastAPI routers — one module per cross-cutting domain.
+"""FastAPI routers — one module per domain.
 
-Capability routers (scripts, edits, locations, casting, shoots) moved
-under `app/capabilities/<key>/router.py` in Phase D and are mounted via
-`app.capabilities.registry`. Only the always-on, non-capability routes
-stay here.
+All routers (including the per-feature ones: scripts, edits, locations,
+casting, shoots) live here as flat top-level modules and get mounted
+directly in `app/main.py`.
 """
 
 from app.routes import auth, health, projects

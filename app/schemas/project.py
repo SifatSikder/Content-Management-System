@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -37,11 +36,11 @@ class StagePublic(BaseModel):
 class DepartmentEmbed(BaseModel):
     """Minimal department projection inlined on a project response.
 
-    Carries `capabilities`, per-capability `capability_configs`, and
-    `terminology` — everything the frontend needs to decide which tabs
-    to render, how each capability tab should look, and what labels to
-    use ("New project" vs "New lead"). Saves the frontend a second
-    round-trip per project page.
+    Carries `template_key` (the frontend uses it to pick the tab set + the
+    participant_roster cast/lead mode) and `terminology` (per-department i18n
+    overrides). The shape used to also include `capabilities` +
+    `capability_configs`; both were removed when capability gating moved to
+    a hardcoded `template_key → tabs` map on the frontend.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -49,8 +48,7 @@ class DepartmentEmbed(BaseModel):
     id: uuid.UUID
     name: str
     slug: str
-    capabilities: list[str]
-    capability_configs: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    template_key: str | None = None
     terminology: dict[str, dict[str, str]] = Field(default_factory=dict)
 
 

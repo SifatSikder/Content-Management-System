@@ -7,14 +7,14 @@
  * key into `{ title, description, group }` so the matrix editor can render
  * grouped, readable rows.
  *
- * Static keys (project + capability actions) are hardcoded here — there
- * are ~10 of them and they change at the same cadence as the backend
- * capability registry. Dynamic `stage.move:<from>-><to>` keys resolve via
- * the per-department stage label lookup so renaming a stage immediately
- * flows through the picker too.
+ * The "which actions are available for this department" question lives in
+ * `permissionActionsByTemplate.ts` — there's one map indexed by
+ * `template_key`, no per-department feature toggle anymore. Dynamic
+ * `stage.move:<from>-><to>` keys still resolve via the per-department
+ * stage label lookup so renaming a stage flows through.
  */
 
-import { CAPABILITY_REGISTRY } from "@/features/capabilities/registry";
+import { permissionActionsForTemplate } from "@/features/departments/lib/permissionActionsByTemplate";
 import type { Stage } from "@/features/departments/types";
 
 export type PermissionGroup =
@@ -83,12 +83,11 @@ const STATIC_LABELS: Record<string, StaticEntry> = {
 const GROUP_LABELS: Record<PermissionGroup, string> = {
   project: "Projects",
   stage: "Stage transitions",
-  script_versioning: CAPABILITY_REGISTRY.script_versioning?.name ?? "Script versioning",
-  asset_review_with_timecodes:
-    CAPABILITY_REGISTRY.asset_review_with_timecodes?.name ?? "Asset review",
-  location_scouting: CAPABILITY_REGISTRY.location_scouting?.name ?? "Location scouting",
-  participant_roster: CAPABILITY_REGISTRY.participant_roster?.name ?? "Participant roster",
-  event_scheduling: CAPABILITY_REGISTRY.event_scheduling?.name ?? "Event scheduling",
+  script_versioning: "Script versioning",
+  asset_review_with_timecodes: "Asset review",
+  location_scouting: "Location scouting",
+  participant_roster: "Participant roster",
+  event_scheduling: "Event scheduling",
   other: "Other",
 };
 
@@ -138,20 +137,17 @@ export function permissionDisplay(
     return { ...known, groupLabel: GROUP_LABELS[known.group] };
   }
 
-  // Fallback: try to associate the key with a known capability by prefix.
+  // Fallback: associate the key with a group by `<prefix>.<verb>` shape.
   const dotIndex = actionKey.indexOf(".");
   if (dotIndex !== -1) {
     const prefix = actionKey.slice(0, dotIndex);
-    const cap = CAPABILITY_REGISTRY[prefix];
-    if (cap) {
-      const group = (prefix as PermissionGroup) in GROUP_LABELS
-        ? (prefix as PermissionGroup)
-        : "other";
+    if ((prefix as PermissionGroup) in GROUP_LABELS) {
+      const group = prefix as PermissionGroup;
       return {
         title: titleCase(actionKey.slice(dotIndex + 1)),
-        description: `${cap.name} action.`,
+        description: `${GROUP_LABELS[group]} action.`,
         group,
-        groupLabel: GROUP_LABELS[group] ?? cap.name,
+        groupLabel: GROUP_LABELS[group],
       };
     }
   }
@@ -164,7 +160,7 @@ export function permissionDisplay(
   };
 }
 
-/** Static actions every department exposes regardless of capabilities. */
+/** Static actions every department exposes regardless of template. */
 const PROJECT_ACTIONS: readonly string[] = [
   "project.create",
   "project.view",
@@ -176,24 +172,20 @@ const PROJECT_ACTIONS: readonly string[] = [
  * Enumerate every action key the matrix should render rows for in this
  * department:
  *   * project.* — always
- *   * capability action keys — only for capabilities enabled on the dept
+ *   * template-defined capability action keys (from
+ *     `permissionActionsByTemplate.ts`)
  *   * stage.move:<from>-><to> — derived from each stage's
- *     `allowed_from_stage_ids` (so the picker matches the runtime workflow)
+ *     `allowed_from_stage_ids`
  *
- * Rows already in the DB whose key isn't in this list (e.g. a backend
- * action the frontend registry hasn't shipped yet) still render — the
+ * Rows already in the DB whose key isn't in this list still render — the
  * matrix merges this list with the persisted rows.
  */
 export function availableActionKeys(
-  capabilities: readonly string[],
+  templateKey: string | null | undefined,
   stages: readonly Stage[],
 ): string[] {
   const keys: string[] = [...PROJECT_ACTIONS];
-
-  for (const cap of capabilities) {
-    const entry = CAPABILITY_REGISTRY[cap];
-    if (entry) keys.push(...entry.permissionActions);
-  }
+  keys.push(...permissionActionsForTemplate(templateKey));
 
   // Stage transitions: target.allowed_from_stage_ids tells us which source
   // stages can flow into `target`. Resolve those ids back to stage keys.
@@ -208,4 +200,3 @@ export function availableActionKeys(
 
   return keys;
 }
-
