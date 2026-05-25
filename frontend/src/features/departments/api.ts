@@ -1,4 +1,4 @@
-import { apiFetchAuthed } from "@/lib/api-client";
+import { apiFetchAuthed, localFetch } from "@/lib/api-client";
 
 import type {
   CreateDepartmentBody,
@@ -6,7 +6,10 @@ import type {
   CreateStageBody,
   Department,
   DepartmentListResponse,
+  DepartmentMembership,
+  DepartmentMembershipListResponse,
   DepartmentRole,
+  InviteDepartmentMemberBody,
   MeDepartmentsResponse,
   Permission,
   PermissionListResponse,
@@ -137,6 +140,44 @@ export function upsertPermission(
     method: "PATCH",
     body: body as unknown as BodyInit,
   });
+}
+
+// --- Department members --------------------------------------------------
+
+export function listDepartmentMembers(
+  departmentId: string,
+): Promise<DepartmentMembershipListResponse> {
+  return apiFetchAuthed<DepartmentMembershipListResponse>(
+    `/departments/${departmentId}/memberships`,
+  );
+}
+
+/**
+ * Invite a person to a department. Goes through the Next.js BFF route so
+ * user-creation, invite-token, and the welcome email run alongside the
+ * FastAPI membership write. See `app/api/departments/[id]/invite/route.ts`.
+ */
+export function inviteDepartmentMember(
+  departmentId: string,
+  body: InviteDepartmentMemberBody,
+): Promise<DepartmentMembership & { invite_url_for_admin?: string }> {
+  return localFetch<DepartmentMembership & { invite_url_for_admin?: string }>(
+    `/api/departments/${departmentId}/invite`,
+    {
+      method: "POST",
+      body: body as unknown as BodyInit,
+    },
+  );
+}
+
+export function removeDepartmentMember(
+  departmentId: string,
+  membershipId: string,
+): Promise<void> {
+  return apiFetchAuthed<void>(
+    `/departments/${departmentId}/memberships/${membershipId}`,
+    { method: "DELETE" },
+  );
 }
 
 // --- Me ------------------------------------------------------------------

@@ -62,36 +62,37 @@ export function DepartmentList({
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {items.map((d) => (
-            <Card key={d.id}>
-              <CardHeader>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <FolderKanban className="size-4" />
-                      <span className="truncate">{d.name}</span>
-                    </CardTitle>
-                    <CardDescription className="font-mono text-xs">
-                      {d.slug}
-                    </CardDescription>
+            <Link
+              key={d.id}
+              href={`/businesses/${businessSlug}/departments/${d.id}`}
+              className="focus-visible:ring-ring rounded-xl focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+            >
+              <Card className="hover:border-ring h-full transition-colors">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <FolderKanban className="size-4" />
+                        <span className="truncate">{d.name}</span>
+                      </CardTitle>
+                      <CardDescription className="font-mono text-xs">
+                        {d.slug}
+                      </CardDescription>
+                    </div>
+                    {d.archived_at ? (
+                      <Badge variant="outline">{t("archived")}</Badge>
+                    ) : null}
                   </div>
-                  {d.archived_at ? (
-                    <Badge variant="outline">{t("archived")}</Badge>
-                  ) : null}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="text-muted-foreground text-xs">
-                  {d.capabilities.length === 0
-                    ? t("no_capabilities")
-                    : t("capabilities_count", { count: d.capabilities.length })}
-                </div>
-                <Button asChild size="sm" variant="outline">
-                  <Link href={`/businesses/${businessSlug}/departments/${d.id}`}>
-                    {t("open")}
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-muted-foreground text-xs">
+                    {d.capabilities.length === 0
+                      ? t("no_capabilities")
+                      : t("capabilities_count", { count: d.capabilities.length })}
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       )}

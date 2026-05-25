@@ -74,7 +74,10 @@ async def post_membership(
             "User is already a member of this business",
         ) from exc
     await session.commit()
-    await session.refresh(membership)
+    # `lazy="raise"` on BusinessMembershipModel.user means the default
+    # refresh would explode when serialisation accesses `.user`. Include
+    # the relation in the refresh so the response carries the joined user.
+    await session.refresh(membership, attribute_names=["user"])
     return BusinessMembershipPublic.model_validate(membership)
 
 
@@ -96,4 +99,8 @@ async def delete_membership(
         )
     except business_service.BusinessNotFoundError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Membership not found") from exc
+    except business_service.CannotRevokeCeoError as exc:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "The CEO's membership cannot be revoked"
+        ) from exc
     await session.commit()

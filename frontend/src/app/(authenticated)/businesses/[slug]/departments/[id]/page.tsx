@@ -9,10 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getDepartment } from "@/features/departments/api";
 import { DepartmentEditor } from "@/features/departments/components/DepartmentEditor";
-import { PermissionMatrixEditor } from "@/features/departments/components/PermissionMatrixEditor";
+import { DepartmentMembersEditor } from "@/features/departments/components/DepartmentMembersEditor";
 import { RoleEditor } from "@/features/departments/components/RoleEditor";
 import { StageEditor } from "@/features/departments/components/StageEditor";
-import type { Department, DepartmentRole } from "@/features/departments/types";
+import type { Department } from "@/features/departments/types";
 
 export default function DepartmentDetailPage() {
   const t = useTranslations("departments");
@@ -20,7 +20,6 @@ export default function DepartmentDetailPage() {
   const params = useParams<{ id: string; slug: string }>();
   const [department, setDepartment] = useState<Department | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedRole, setSelectedRole] = useState<DepartmentRole | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -68,8 +67,8 @@ export default function DepartmentDetailPage() {
       </header>
       <DepartmentEditor department={department} onChanged={setDepartment} />
       <StageEditor departmentId={department.id} />
-      <RoleEditor departmentId={department.id} onSelect={setSelectedRole} />
-      {selectedRole ? <PermissionMatrixEditor role={selectedRole} /> : null}
+      <RoleEditor department={department} />
+      <DepartmentMembersEditor departmentId={department.id} />
     </div>
   );
 }

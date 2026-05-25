@@ -157,8 +157,11 @@ async def soft_delete_business(
 async def list_memberships(
     session: AsyncSession, *, business_id: uuid.UUID
 ) -> Sequence[BusinessMembershipModel]:
+    from sqlalchemy.orm import selectinload
+
     result = await session.execute(
         select(BusinessMembershipModel)
+        .options(selectinload(BusinessMembershipModel.user))
         .where(BusinessMembershipModel.business_id == business_id)
         .order_by(BusinessMembershipModel.created_at.asc())
     )
@@ -204,16 +207,32 @@ async def invite_member_by_email(
         invited_by=actor.id,
         joined_at=datetime.now(UTC),
     )
+    # Pre-attach the user we already have in hand so the
+    # `lazy="raise"` relationship is satisfied without an extra query
+    # when the route serialises the freshly-created membership.
+    membership.user = user
     session.add(membership)
     await session.flush()
     return membership
 
 
+class CannotRevokeCeoError(Exception):
+    """Raised when a caller tries to revoke the CEO's business membership.
+
+    The CEO is the platform super-admin; they bypass RLS and must be a member
+    of every business by definition. Revoking would orphan the business.
+    """
+
+
 async def revoke_membership(
     session: AsyncSession, *, membership_id: uuid.UUID, business_id: uuid.UUID
 ) -> None:
+    from sqlalchemy.orm import selectinload
+
     result = await session.execute(
-        select(BusinessMembershipModel).where(
+        select(BusinessMembershipModel)
+        .options(selectinload(BusinessMembershipModel.user))
+        .where(
             BusinessMembershipModel.id == membership_id,
             BusinessMembershipModel.business_id == business_id,
         )
@@ -221,12 +240,15 @@ async def revoke_membership(
     membership = result.scalar_one_or_none()
     if membership is None:
         raise BusinessNotFoundError(f"membership {membership_id}")
+    if membership.user.is_super_admin:
+        raise CannotRevokeCeoError(str(membership.user_id))
     await session.delete(membership)
     await session.flush()
 
 
 __all__ = [
     "BusinessNotFoundError",
+    "CannotRevokeCeoError",
     "MembershipAlreadyExistsError",
     "SlugTakenError",
     "UserNotFoundError",

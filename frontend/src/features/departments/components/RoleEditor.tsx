@@ -24,25 +24,32 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PermissionMatrixEditor } from "@/features/departments/components/PermissionMatrixEditor";
 import {
   createRole,
   deleteRole,
   listRoles,
 } from "@/features/departments/api";
-import type { DepartmentRole } from "@/features/departments/types";
+import type { Department, DepartmentRole } from "@/features/departments/types";
 import { ApiError } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
 
-export function RoleEditor({
-  departmentId,
-  onSelect,
-}: {
-  departmentId: string;
-  onSelect?: (role: DepartmentRole) => void;
-}) {
+/**
+ * Roles + permission matrix for a department.
+ *
+ * Role selection lives inside this component (instead of being lifted into
+ * the page) because the permission matrix is a sub-section of the role
+ * card now — picking a role expands its matrix in place. Avoids the
+ * surprise of "where did the permissions go?" when the selected row is
+ * far from the matrix lower on the page.
+ */
+export function RoleEditor({ department }: { department: Department }) {
   const t = useTranslations("departments");
   const tCommon = useTranslations("common");
+  const departmentId = department.id;
   const [roles, setRoles] = useState<DepartmentRole[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -59,6 +66,12 @@ export function RoleEditor({
   useEffect(() => {
     void load();
   }, [load]);
+
+  const selectedRole = roles.find((r) => r.id === selectedRoleId) ?? null;
+
+  function togglePermissions(role: DepartmentRole) {
+    setSelectedRoleId((prev) => (prev === role.id ? null : role.id));
+  }
 
   return (
     <Card>
@@ -78,43 +91,65 @@ export function RoleEditor({
           <p className="text-muted-foreground text-sm">{t("roles_empty")}</p>
         ) : (
           <div className="space-y-2">
-            {roles.map((r) => (
-              <div
-                key={r.id}
-                className="bg-card flex items-center gap-3 rounded-md border px-3 py-2"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">
-                    {r.name_i18n.en ?? r.name_i18n.nl ?? r.key}
-                  </div>
-                  <div className="text-muted-foreground font-mono text-xs">
-                    {r.key}
-                  </div>
-                </div>
-                {onSelect ? (
-                  <Button variant="outline" size="sm" onClick={() => onSelect(r)}>
-                    {t("edit_permissions")}
-                  </Button>
-                ) : null}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Delete role"
-                  onClick={async () => {
-                    try {
-                      await deleteRole(departmentId, r.id);
-                      toast.success(t("role_deleted_toast"));
-                      await load();
-                    } catch (exc) {
-                      const msg = exc instanceof ApiError ? exc.message : tCommon("error");
-                      toast.error(msg);
-                    }
-                  }}
+            {roles.map((r) => {
+              const isSelected = r.id === selectedRoleId;
+              return (
+                <div
+                  key={r.id}
+                  className={cn(
+                    "rounded-md border transition-colors",
+                    isSelected ? "border-ring bg-accent/30" : "bg-card",
+                  )}
                 >
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            ))}
+                  <div className="flex items-center gap-3 px-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium">
+                        {r.name_i18n.en ?? r.name_i18n.nl ?? r.key}
+                      </div>
+                      <div className="text-muted-foreground font-mono text-xs">
+                        {r.key}
+                      </div>
+                    </div>
+                    <Button
+                      variant={isSelected ? "secondary" : "outline"}
+                      size="sm"
+                      onClick={() => togglePermissions(r)}
+                    >
+                      {isSelected
+                        ? t("hide_permissions")
+                        : t("edit_permissions")}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Delete role"
+                      onClick={async () => {
+                        try {
+                          await deleteRole(departmentId, r.id);
+                          toast.success(t("role_deleted_toast"));
+                          if (selectedRoleId === r.id) setSelectedRoleId(null);
+                          await load();
+                        } catch (exc) {
+                          const msg =
+                            exc instanceof ApiError ? exc.message : tCommon("error");
+                          toast.error(msg);
+                        }
+                      }}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                  {isSelected && selectedRole ? (
+                    <div className="border-t px-3 py-4">
+                      <PermissionMatrixEditor
+                        role={selectedRole}
+                        department={department}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         )}
       </CardContent>

@@ -1,25 +1,19 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
+import { useDepartmentStages } from "@/features/departments/hooks/useDepartmentStages";
 import { useStageLabel } from "@/features/departments/hooks/useStageLabel";
 import { listPermissions, upsertPermission } from "@/features/departments/api";
-import type { DepartmentRole, Permission } from "@/features/departments/types";
+import type { Department, DepartmentRole, Permission } from "@/features/departments/types";
 import {
+  availableActionKeys,
   PERMISSION_GROUP_ORDER,
   type PermissionDisplay,
   permissionDisplay,
@@ -29,19 +23,43 @@ import { ApiError } from "@/lib/api-client";
 /**
  * Permission matrix for one role.
  *
- * Rows are grouped (Projects, Stage transitions, per-capability sections)
- * with a human title + description so the CEO toggling roles doesn't have
- * to read raw `script_versioning.lock`-style keys. The wire format is
- * unchanged — toggling a switch still upserts a `(role_id, action_key)`
- * row server-side via `permission_service`.
+ * Every action available in this department renders as a toggleable row,
+ * not just the ones already persisted. The available set comes from
+ * `availableActionKeys(capabilities, stages)` — project actions + the
+ * action keys declared by each enabled capability + every stage transition
+ * the workflow allows. Rows that don't yet have a `(role, action)` row in
+ * the DB show as off and only get a row when toggled on. Persisted rows
+ * whose key isn't in the available set (e.g. a backend action the
+ * frontend registry hasn't shipped yet) still render — the matrix is
+ * additive, never silently hides a stored permission.
+ *
+ * Renders as a section (no outer `Card`) so callers can compose it inline
+ * inside another card — the role list above it, specifically.
  */
-export function PermissionMatrixEditor({ role }: { role: DepartmentRole }) {
+export function PermissionMatrixEditor({
+  role,
+  department,
+}: {
+  role: DepartmentRole;
+  department: Department;
+}) {
   const t = useTranslations("departments");
   const tCommon = useTranslations("common");
   const resolveStage = useStageLabel(role.department_id);
+  const { stages } = useDepartmentStages(role.department_id);
   const [rows, setRows] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newAction, setNewAction] = useState("");
+  const [pendingKey, setPendingKey] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+
+  function toggleGroup(groupKey: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) next.delete(groupKey);
+      else next.add(groupKey);
+      return next;
+    });
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -59,23 +77,42 @@ export function PermissionMatrixEditor({ role }: { role: DepartmentRole }) {
     void load();
   }, [load]);
 
-  // Bucket rows by display group, preserving a stable inter-row order
-  // (alphabetical by title within each group keeps the layout calm as
-  // permissions are added/removed).
+  // Merge available actions with persisted rows so every known action gets
+  // a row, even if no `(role, action)` record exists yet. Persisted rows
+  // with unknown keys land at the end (defensive: never hide a stored
+  // permission). Then bucket by display group.
   const groups = useMemo(() => {
+    const persisted = new Map(rows.map((r) => [r.action_key, r] as const));
+    const seen = new Set<string>();
+    const merged: { key: string; perm: Permission | null }[] = [];
+
+    for (const key of availableActionKeys(department.capabilities, stages)) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push({ key, perm: persisted.get(key) ?? null });
+    }
+    for (const r of rows) {
+      if (seen.has(r.action_key)) continue;
+      seen.add(r.action_key);
+      merged.push({ key: r.action_key, perm: r });
+    }
+
     const buckets = new Map<
       string,
-      { label: string; items: { perm: Permission; display: PermissionDisplay }[] }
+      {
+        label: string;
+        items: { key: string; perm: Permission | null; display: PermissionDisplay }[];
+      }
     >();
-    for (const perm of rows) {
-      const display = permissionDisplay(perm.action_key, resolveStage);
-      const existing = buckets.get(display.group);
-      if (existing) {
-        existing.items.push({ perm, display });
+    for (const entry of merged) {
+      const display = permissionDisplay(entry.key, resolveStage);
+      const bucket = buckets.get(display.group);
+      if (bucket) {
+        bucket.items.push({ ...entry, display });
       } else {
         buckets.set(display.group, {
           label: display.groupLabel,
-          items: [{ perm, display }],
+          items: [{ ...entry, display }],
         });
       }
     }
@@ -86,106 +123,103 @@ export function PermissionMatrixEditor({ role }: { role: DepartmentRole }) {
       const bucket = buckets.get(key);
       return bucket ? [{ key, ...bucket }] : [];
     });
-  }, [rows, resolveStage]);
+  }, [rows, resolveStage, department.capabilities, stages]);
 
-  async function flip(p: Permission, next: boolean) {
+  async function toggle(actionKey: string, next: boolean) {
+    setPendingKey(actionKey);
     try {
       const updated = await upsertPermission(role.id, {
-        action_key: p.action_key,
+        action_key: actionKey,
         allowed: next,
       });
-      setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
-    } catch (exc) {
-      const msg = exc instanceof ApiError ? exc.message : tCommon("error");
-      toast.error(msg);
-    }
-  }
-
-  async function addAction(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newAction.trim()) return;
-    try {
-      const created = await upsertPermission(role.id, {
-        action_key: newAction.trim(),
-        allowed: true,
-      });
       setRows((prev) => {
-        const without = prev.filter((r) => r.action_key !== created.action_key);
-        return [...without, created];
+        const without = prev.filter((r) => r.action_key !== actionKey);
+        return [...without, updated];
       });
-      setNewAction("");
     } catch (exc) {
       const msg = exc instanceof ApiError ? exc.message : tCommon("error");
       toast.error(msg);
+    } finally {
+      setPendingKey(null);
     }
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>
+    <section className="space-y-4">
+      <header className="space-y-1">
+        <h3 className="text-sm font-semibold">
           {t("permissions_title")} — {role.name_i18n.en ?? role.key}
-        </CardTitle>
-        <CardDescription>{t("permissions_subtitle")}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {loading ? (
-          <Skeleton className="h-24 w-full" />
-        ) : rows.length === 0 ? (
-          <p className="text-muted-foreground text-sm">{t("permissions_empty")}</p>
-        ) : (
-          <div className="space-y-6">
-            {groups.map((group) => (
-              <section key={group.key} className="space-y-2">
-                <h3 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                  {group.label}
-                </h3>
-                <ul className="divide-y rounded-md border">
-                  {group.items.map(({ perm, display }) => (
-                    <li
-                      key={perm.id}
-                      className="flex items-start justify-between gap-4 px-3 py-3"
-                    >
-                      <div className="min-w-0 flex-1 space-y-0.5">
-                        <div className="text-sm font-medium">{display.title}</div>
-                        <div className="text-muted-foreground text-xs">
-                          {display.description}
-                        </div>
-                        <div className="text-muted-foreground/70 pt-0.5 font-mono text-[10px]">
-                          {perm.action_key}
-                        </div>
-                      </div>
-                      <Switch
-                        checked={perm.allowed}
-                        onCheckedChange={(v) => void flip(perm, v)}
-                        aria-label={display.title}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
-          </div>
-        )}
+        </h3>
+        <p className="text-muted-foreground text-xs">{t("permissions_subtitle")}</p>
+      </header>
 
-        <details className="text-sm">
-          <summary className="text-muted-foreground hover:text-foreground cursor-pointer text-xs">
-            {t("add_custom_action_hint")}
-          </summary>
-          <form className="mt-2 flex gap-2" onSubmit={addAction}>
-            <Input
-              value={newAction}
-              onChange={(e) => setNewAction(e.target.value)}
-              placeholder="script_versioning.lock"
-              className="flex-1 font-mono text-xs"
-            />
-            <Button type="submit" size="sm">
-              <Plus className="mr-1 size-4" />
-              {t("add_action")}
-            </Button>
-          </form>
-        </details>
-      </CardContent>
-    </Card>
+      {loading ? (
+        <Skeleton className="h-24 w-full" />
+      ) : groups.length === 0 ? (
+        <p className="text-muted-foreground text-sm">{t("permissions_empty")}</p>
+      ) : (
+        <div className="space-y-5">
+          {groups.map((group) => {
+            const isCollapsed = collapsed.has(group.key);
+            const headerId = `perm-group-${role.id}-${group.key}`;
+            return (
+              <section key={group.key} className="space-y-2">
+                <button
+                  type="button"
+                  id={headerId}
+                  onClick={() => toggleGroup(group.key)}
+                  aria-expanded={!isCollapsed}
+                  aria-controls={`${headerId}-list`}
+                  className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1.5 text-xs font-medium tracking-wide uppercase"
+                >
+                  <ChevronDown
+                    className={cn(
+                      "size-3.5 transition-transform",
+                      isCollapsed ? "-rotate-90" : "rotate-0",
+                    )}
+                  />
+                  <span>{group.label}</span>
+                  <span className="text-muted-foreground/70 ml-1 text-[10px] normal-case tracking-normal">
+                    ({group.items.length})
+                  </span>
+                </button>
+                {isCollapsed ? null : (
+                  <ul
+                    id={`${headerId}-list`}
+                    className="divide-y rounded-md border"
+                  >
+                    {group.items.map(({ key, perm, display }) => {
+                      const allowed = perm?.allowed ?? false;
+                      return (
+                        <li
+                          key={key}
+                          className="flex items-start justify-between gap-4 px-3 py-3"
+                        >
+                          <div className="min-w-0 flex-1 space-y-0.5">
+                            <div className="text-sm font-medium">{display.title}</div>
+                            <div className="text-muted-foreground text-xs">
+                              {display.description}
+                            </div>
+                            <div className="text-muted-foreground/70 pt-0.5 font-mono text-[10px]">
+                              {key}
+                            </div>
+                          </div>
+                          <Switch
+                            checked={allowed}
+                            disabled={pendingKey === key}
+                            onCheckedChange={(v) => void toggle(key, v)}
+                            aria-label={display.title}
+                          />
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }

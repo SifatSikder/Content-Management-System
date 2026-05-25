@@ -125,6 +125,37 @@ export interface UpsertPermissionBody {
   allowed: boolean;
 }
 
+/** Joined user info on a department membership row. */
+export interface DepartmentMembershipUser {
+  id: string;
+  email: string;
+  name: string;
+  role: string;
+  avatar_url: string | null;
+}
+
+export interface DepartmentMembership {
+  id: string;
+  department_id: string;
+  business_id: string;
+  user_id: string;
+  role_id: string;
+  user: DepartmentMembershipUser;
+  role: DepartmentRole;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DepartmentMembershipListResponse {
+  items: DepartmentMembership[];
+}
+
+export interface InviteDepartmentMemberBody {
+  email: string;
+  name: string;
+  role_id: string;
+}
+
 export interface MeDepartmentEntry {
   id: string;
   business_id: string;

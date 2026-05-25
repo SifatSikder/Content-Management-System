@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Kanban, LayoutDashboard, Menu, Settings, Users } from "lucide-react";
+import { Building2, Kanban, LayoutDashboard, Menu, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -26,21 +26,18 @@ import { cn } from "@/lib/utils";
 
 interface NavItem {
   href: string;
-  labelKey: "kanban" | "dashboard" | "team" | "settings" | "businesses";
+  labelKey: "kanban" | "dashboard" | "settings" | "businesses";
   icon: React.ComponentType<{ className?: string }>;
   ceoOnly?: boolean;
 }
 
-// Phase A keeps the legacy real-estate kanban + dashboard items in place.
 // The "Businesses" entry is the CEO's seat for spinning up and managing
-// multiple business tenants; Phase B switches the kanban to be department-
-// scoped and the nav becomes data-driven from the current business's
-// department list.
+// multiple business tenants. Member management lives per-department under
+// each business — there is no platform-wide "Team" surface anymore.
 const ALL_NAV_ITEMS: readonly NavItem[] = [
   { href: "/projects", labelKey: "kanban", icon: Kanban },
   { href: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
   { href: "/businesses", labelKey: "businesses", icon: Building2, ceoOnly: true },
-  { href: "/team", labelKey: "team", icon: Users, ceoOnly: true },
   { href: "/settings", labelKey: "settings", icon: Settings },
 ];
 

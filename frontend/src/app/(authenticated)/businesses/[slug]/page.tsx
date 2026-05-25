@@ -9,6 +9,12 @@ import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useBusinesses } from "@/features/businesses/hooks/useBusinesses";
 import { DepartmentList } from "@/features/departments/components/DepartmentList";
 
+/**
+ * Single business landing page — just the department list. Members are
+ * managed per-department now (a person belongs to a department, not to
+ * a business as a whole — the business membership is auto-derived from
+ * their department assignments).
+ */
 export default function BusinessDashboardPage() {
   const t = useTranslations("businesses");
   const params = useParams<{ slug: string }>();
@@ -42,7 +48,7 @@ export default function BusinessDashboardPage() {
   const canEdit = auth.user?.is_super_admin || business.is_owner;
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-6 p-6">
+    <div className="mx-auto w-full max-w-5xl space-y-8 p-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">{business.name}</h1>
         <p className="text-muted-foreground font-mono text-xs">{business.slug}</p>

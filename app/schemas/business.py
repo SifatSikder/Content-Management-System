@@ -9,6 +9,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.models.enums import BusinessMembershipStatus
+from app.schemas.auth import UserPublic
 
 
 class CreateBusinessBody(BaseModel):
@@ -57,6 +58,7 @@ class BusinessMembershipPublic(BaseModel):
     id: uuid.UUID
     business_id: uuid.UUID
     user_id: uuid.UUID
+    user: UserPublic
     status: BusinessMembershipStatus
     invited_by: uuid.UUID | None = None
     joined_at: datetime | None = None

@@ -19,12 +19,14 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.business_membership import BusinessMembershipModel
 from app.models.department import DepartmentModel
 from app.models.department_membership import DepartmentMembershipModel
 from app.models.department_role import DepartmentRoleModel
 from app.models.department_role_permission import DepartmentRolePermissionModel
 from app.models.department_stage import DepartmentStageModel
 from app.models.department_template import DepartmentTemplateModel
+from app.models.enums import BusinessMembershipStatus
 from app.models.project import ProjectModel
 
 log = structlog.get_logger(__name__)
@@ -505,12 +507,91 @@ async def upsert_permission(
 async def list_department_memberships(
     session: AsyncSession, *, department_id: uuid.UUID
 ) -> Sequence[DepartmentMembershipModel]:
+    from sqlalchemy.orm import selectinload
+
     result = await session.execute(
         select(DepartmentMembershipModel)
+        .options(
+            selectinload(DepartmentMembershipModel.user),
+            selectinload(DepartmentMembershipModel.role),
+        )
         .where(DepartmentMembershipModel.department_id == department_id)
         .order_by(DepartmentMembershipModel.created_at.asc())
     )
     return result.scalars().all()
+
+
+async def _ensure_business_membership(
+    session: AsyncSession,
+    *,
+    business_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> None:
+    """Idempotently grant `user_id` a business membership in `business_id`.
+
+    Business memberships are auto-managed off department memberships: as
+    soon as a user is assigned to any department in a business, they get
+    the business-level row. If one already exists in any non-revoked state
+    we leave it alone. A previously-revoked row is reactivated.
+    """
+    existing_q = await session.execute(
+        select(BusinessMembershipModel).where(
+            BusinessMembershipModel.business_id == business_id,
+            BusinessMembershipModel.user_id == user_id,
+        )
+    )
+    existing = existing_q.scalar_one_or_none()
+    if existing is None:
+        session.add(
+            BusinessMembershipModel(
+                business_id=business_id,
+                user_id=user_id,
+                status=BusinessMembershipStatus.ACTIVE,
+                joined_at=datetime.now(UTC),
+            )
+        )
+        await session.flush()
+        return
+    if existing.status != BusinessMembershipStatus.ACTIVE:
+        existing.status = BusinessMembershipStatus.ACTIVE
+        existing.joined_at = existing.joined_at or datetime.now(UTC)
+        await session.flush()
+
+
+async def _revoke_business_membership_if_orphan(
+    session: AsyncSession,
+    *,
+    business_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> None:
+    """Delete the user's business membership if they have no department
+    memberships left in this business.
+
+    Counterpart to `_ensure_business_membership`: removing the user's last
+    department assignment in a business should also revoke their
+    business-level entry permit. The CEO never has membership rows
+    (super-admin bypass) so they're unaffected.
+    """
+    remaining_q = await session.execute(
+        select(DepartmentMembershipModel.id)
+        .where(
+            DepartmentMembershipModel.business_id == business_id,
+            DepartmentMembershipModel.user_id == user_id,
+        )
+        .limit(1)
+    )
+    if remaining_q.first() is not None:
+        return
+    bm_q = await session.execute(
+        select(BusinessMembershipModel).where(
+            BusinessMembershipModel.business_id == business_id,
+            BusinessMembershipModel.user_id == user_id,
+        )
+    )
+    bm = bm_q.scalar_one_or_none()
+    if bm is not None:
+        await session.delete(bm)
+        await session.flush()
 
 
 async def assign_department_member(
@@ -520,6 +601,11 @@ async def assign_department_member(
     user_id: uuid.UUID,
     role_id: uuid.UUID,
 ) -> DepartmentMembershipModel:
+    # Ensure the user has the prerequisite business membership. Idempotent.
+    await _ensure_business_membership(
+        session, business_id=department.business_id, user_id=user_id
+    )
+
     # Re-use the existing row if the user is already a member of the
     # department — update their role instead of duplicating.
     result = await session.execute(
@@ -557,8 +643,15 @@ async def remove_department_member(
     membership = result.scalar_one_or_none()
     if membership is None:
         raise DepartmentNotFoundError(f"membership {membership_id}")
+    business_id = membership.business_id
+    user_id = membership.user_id
     await session.delete(membership)
     await session.flush()
+    # Auto-revoke the business membership if this was the user's last
+    # department in the business.
+    await _revoke_business_membership_if_orphan(
+        session, business_id=business_id, user_id=user_id
+    )
 
 
 __all__ = [

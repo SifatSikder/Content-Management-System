@@ -7,7 +7,9 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
+from app.schemas.auth import UserPublic
 
 # --- Templates -----------------------------------------------------------
 
@@ -202,8 +204,25 @@ class DepartmentMembershipPublic(BaseModel):
     business_id: uuid.UUID
     user_id: uuid.UUID
     role_id: uuid.UUID
+    user: UserPublic
+    role: RolePublic
     created_at: datetime
     updated_at: datetime
+
+
+class InviteDepartmentMemberBody(BaseModel):
+    """Request body for the orchestrated invite-to-department flow.
+
+    The Next.js BFF layer (`/api/businesses/[slug]/departments/[id]/invite`)
+    is the actual entry point — it find-or-creates the platform user, mints
+    the invitation token, sends the email, then forwards `{user_id, role_id}`
+    to the existing assign-membership FastAPI endpoint. This DTO documents
+    the shape the BFF accepts; FastAPI itself only sees `user_id + role_id`.
+    """
+
+    email: EmailStr
+    name: str = Field(min_length=1, max_length=120)
+    role_id: uuid.UUID
 
 
 class DepartmentMembershipListResponse(BaseModel):

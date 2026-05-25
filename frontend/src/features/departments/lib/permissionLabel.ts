@@ -15,6 +15,7 @@
  */
 
 import { CAPABILITY_REGISTRY } from "@/features/capabilities/registry";
+import type { Stage } from "@/features/departments/types";
 
 export type PermissionGroup =
   | "project"
@@ -162,3 +163,49 @@ export function permissionDisplay(
     groupLabel: GROUP_LABELS.other,
   };
 }
+
+/** Static actions every department exposes regardless of capabilities. */
+const PROJECT_ACTIONS: readonly string[] = [
+  "project.create",
+  "project.view",
+  "project.edit",
+  "project.delete",
+];
+
+/**
+ * Enumerate every action key the matrix should render rows for in this
+ * department:
+ *   * project.* — always
+ *   * capability action keys — only for capabilities enabled on the dept
+ *   * stage.move:<from>-><to> — derived from each stage's
+ *     `allowed_from_stage_ids` (so the picker matches the runtime workflow)
+ *
+ * Rows already in the DB whose key isn't in this list (e.g. a backend
+ * action the frontend registry hasn't shipped yet) still render — the
+ * matrix merges this list with the persisted rows.
+ */
+export function availableActionKeys(
+  capabilities: readonly string[],
+  stages: readonly Stage[],
+): string[] {
+  const keys: string[] = [...PROJECT_ACTIONS];
+
+  for (const cap of capabilities) {
+    const entry = CAPABILITY_REGISTRY[cap];
+    if (entry) keys.push(...entry.permissionActions);
+  }
+
+  // Stage transitions: target.allowed_from_stage_ids tells us which source
+  // stages can flow into `target`. Resolve those ids back to stage keys.
+  const byId = new Map(stages.map((s) => [s.id, s] as const));
+  for (const target of stages) {
+    for (const fromId of target.allowed_from_stage_ids) {
+      const from = byId.get(fromId);
+      if (!from) continue;
+      keys.push(`stage.move:${from.key}->${target.key}`);
+    }
+  }
+
+  return keys;
+}
+

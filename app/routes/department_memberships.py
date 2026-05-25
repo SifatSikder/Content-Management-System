@@ -70,7 +70,9 @@ async def post_membership(
         role_id=body.role_id,
     )
     await session.commit()
-    await session.refresh(membership)
+    # `lazy="raise"` on the user/role relations means a vanilla refresh
+    # would explode when serialisation walks them. Load them explicitly.
+    await session.refresh(membership, attribute_names=["user", "role"])
     return DepartmentMembershipPublic.model_validate(membership)
 
 

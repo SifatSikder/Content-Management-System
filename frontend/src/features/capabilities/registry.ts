@@ -43,6 +43,12 @@ export interface CapabilityEntry {
   /** Human-readable English fallback when no translation matches. */
   name: string;
   /**
+   * Action keys this capability ships — mirror of the backend
+   * `Capability.permission_actions` tuple. Surfaced in the permission matrix
+   * so a CEO can toggle them without typing raw `<cap>.<verb>` strings.
+   */
+  permissionActions: readonly string[];
+  /**
    * The tab component rendered when a department has this capability enabled.
    * Typed as `ComponentType<any>` because the existing tabs have slightly
    * different prop shapes (some require `role`/`isOwner`, others don't);
@@ -63,18 +69,21 @@ export const CAPABILITY_REGISTRY: Record<string, CapabilityEntry> = {
     key: "script_versioning",
     tabLabelKey: "tab_script",
     name: "Script",
+    permissionActions: ["script_versioning.lock", "script_versioning.unlock"],
     ProjectTab: ScriptTab,
   },
   location_scouting: {
     key: "location_scouting",
     tabLabelKey: "tab_location",
     name: "Locations",
+    permissionActions: [],
     ProjectTab: LocationTab,
   },
   participant_roster: {
     key: "participant_roster",
     tabLabelKey: "tab_casting",
     name: "Casting",
+    permissionActions: [],
     // ParticipantRosterTab dispatches between the cast and lead forms based
     // on the department's `capability_configs.participant_roster.kind`.
     ProjectTab: ParticipantRosterTab,
@@ -83,12 +92,17 @@ export const CAPABILITY_REGISTRY: Record<string, CapabilityEntry> = {
     key: "event_scheduling",
     tabLabelKey: "tab_shoot",
     name: "Shoots",
+    permissionActions: [],
     ProjectTab: ShootTab,
   },
   asset_review_with_timecodes: {
     key: "asset_review_with_timecodes",
     tabLabelKey: "tab_edits",
     name: "Edits",
+    permissionActions: [
+      "asset_review_with_timecodes.approve",
+      "asset_review_with_timecodes.request_changes",
+    ],
     ProjectTab: EditsTab,
   },
 };

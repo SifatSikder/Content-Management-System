@@ -7,7 +7,6 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -58,27 +57,23 @@ export default function BusinessesPage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {items.map((b) => (
-            <Card key={b.id}>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Building2 className="size-4" />
-                  <span className="truncate">{b.name}</span>
-                </CardTitle>
-                <CardDescription className="font-mono text-xs">
-                  {b.slug}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex gap-2">
-                <Button asChild size="sm" variant="outline">
-                  <Link href={`/businesses/${b.slug}`}>{t("open")}</Link>
-                </Button>
-                {b.is_owner || canCreate ? (
-                  <Button asChild size="sm" variant="ghost">
-                    <Link href={`/businesses/${b.slug}/admin`}>{t("admin")}</Link>
-                  </Button>
-                ) : null}
-              </CardContent>
-            </Card>
+            <Link
+              key={b.id}
+              href={`/businesses/${b.slug}`}
+              className="focus-visible:ring-ring rounded-xl focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+            >
+              <Card className="hover:border-ring h-full transition-colors">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Building2 className="size-4" />
+                    <span className="truncate">{b.name}</span>
+                  </CardTitle>
+                  <CardDescription className="font-mono text-xs">
+                    {b.slug}
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
           ))}
         </div>
       )}

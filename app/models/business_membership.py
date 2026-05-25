@@ -10,12 +10,17 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
+from typing import TYPE_CHECKING
+
 from sqlalchemy import DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.enums import BusinessMembershipStatus, pg_enum
+
+if TYPE_CHECKING:
+    from app.models.user import UserModel
 
 
 class BusinessMembershipModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -48,6 +53,15 @@ class BusinessMembershipModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     joined_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+
+    # The `users.id` table is referenced by two FKs on this row (`user_id`
+    # and `invited_by`), so SQLAlchemy needs `foreign_keys=` to disambiguate.
+    # `lazy="raise"` keeps callers honest — `list_memberships` selectinloads
+    # the relation; anything that forgets explodes loudly instead of doing
+    # an N+1 query.
+    user: Mapped["UserModel"] = relationship(
+        "UserModel", foreign_keys=[user_id], lazy="raise"
     )
 
 
