@@ -52,18 +52,18 @@ export interface CapabilityEntry {
   ProjectTab: ComponentType<any>;
 }
 
+// Declaration order is the tab order on the project detail page. We order
+// the five Content Creation capabilities in natural production-flow sequence
+// — Script → Locations → Casting → Shoots → Edits — so a CEO scanning a
+// project's tabs reads them top-to-bottom as the actual pipeline stages.
+// `enabledCapabilities` preserves this order via `Object.values()` (insertion
+// order is stable on modern JS engines).
 export const CAPABILITY_REGISTRY: Record<string, CapabilityEntry> = {
   script_versioning: {
     key: "script_versioning",
     tabLabelKey: "tab_script",
     name: "Script",
     ProjectTab: ScriptTab,
-  },
-  asset_review_with_timecodes: {
-    key: "asset_review_with_timecodes",
-    tabLabelKey: "tab_edits",
-    name: "Edits",
-    ProjectTab: EditsTab,
   },
   location_scouting: {
     key: "location_scouting",
@@ -84,6 +84,12 @@ export const CAPABILITY_REGISTRY: Record<string, CapabilityEntry> = {
     tabLabelKey: "tab_shoot",
     name: "Shoots",
     ProjectTab: ShootTab,
+  },
+  asset_review_with_timecodes: {
+    key: "asset_review_with_timecodes",
+    tabLabelKey: "tab_edits",
+    name: "Edits",
+    ProjectTab: EditsTab,
   },
 };
 
