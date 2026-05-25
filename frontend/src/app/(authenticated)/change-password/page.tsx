@@ -81,7 +81,7 @@ export default function ChangePasswordPage() {
         router.replace("/");
         return;
       }
-      router.replace("/projects");
+      router.replace("/businesses");
     } catch (err) {
       if (err instanceof ApiError) {
         toast.error(err.message);

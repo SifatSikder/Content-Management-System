@@ -7,8 +7,12 @@
  * of authed content for anonymous users).
  *
  *   anon                                  → /
- *   authed on /                           → /projects (or /change-password)
+ *   authed on /                           → /businesses (or /change-password)
  *   authed with must_change_password=true → pinned to /change-password
+ *
+ * Post-login lands on `/businesses` (the business list) so multi-business
+ * users start by picking one. The selected business pins the
+ * `atlas.business` cookie, which scopes every subsequent /projects view.
  *
  * Public paths: `/`, `/accept-invite`, `/reset-password`, `/api/auth/*`.
  *
@@ -23,7 +27,11 @@ import { jwtVerify } from "jose";
 
 const PUBLIC_PATHS = ["/", "/accept-invite", "/reset-password"];
 const CHANGE_PASSWORD_PATH = "/change-password";
-const DEFAULT_AUTHED_DESTINATION = "/projects";
+// Post-login lands on the business list — the multi-business flow starts
+// there: pick a business → its kanban opens. Going straight to /projects
+// would render whatever business the cookie last pinned, which is wrong
+// for a fresh login where the user might own / be a member of several.
+const DEFAULT_AUTHED_DESTINATION = "/businesses";
 const ONBOARDING_PATH = "/businesses/select";
 
 /**

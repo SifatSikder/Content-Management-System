@@ -82,7 +82,7 @@ export default function AcceptInvitePage() {
           redirect: false,
         });
         if (!signin?.error) {
-          router.replace("/projects");
+          router.replace("/businesses");
           return;
         }
       }

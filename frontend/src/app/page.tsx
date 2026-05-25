@@ -41,10 +41,12 @@ export default function HomePage() {
   const auth = useAuth();
   const [submitting, setSubmitting] = useState(false);
 
-  // Already signed in? Hop straight to the right destination.
+  // Already signed in? Hop straight to the right destination. Multi-business
+  // users land on `/businesses` so they can pick which one to work in;
+  // mid-flow password resets still get pinned to `/change-password`.
   useEffect(() => {
     if (auth.status !== "authenticated" || !auth.user) return;
-    router.replace(auth.user.must_change_password ? "/change-password" : "/projects");
+    router.replace(auth.user.must_change_password ? "/change-password" : "/businesses");
   }, [auth.status, auth.user, router]);
 
   const form = useForm<FormValues>({
@@ -149,7 +151,7 @@ export default function HomePage() {
                   type="button"
                   variant="outline"
                   className="w-full"
-                  onClick={() => signIn("google", { callbackUrl: "/projects" })}
+                  onClick={() => signIn("google", { callbackUrl: "/businesses" })}
                   disabled={submitting}
                 >
                   {tAuth("sign_in_with_google")}
