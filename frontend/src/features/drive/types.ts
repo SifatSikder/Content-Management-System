@@ -13,10 +13,6 @@ export interface AttachDriveBody {
   folder_url?: string | null;
 }
 
-export interface ImportGdocBody {
-  document: string;
-}
-
 /** One row in the Drive picker — mirror of `app/schemas/drive.py::DriveDocumentPublic`. */
 export interface DriveDocument {
   id: string;
@@ -27,4 +23,9 @@ export interface DriveDocument {
 
 export interface DriveDocumentListResponse {
   items: DriveDocument[];
+}
+
+/** Rendered HTML body of a single Doc — non-persisting fetch result. */
+export interface DriveDocumentContent {
+  body: string;
 }

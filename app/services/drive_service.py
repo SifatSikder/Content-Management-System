@@ -416,6 +416,25 @@ async def html_to_markdown(html: str) -> str:
     )
 
 
+async def markdown_to_html(md: str) -> str:
+    """Render Markdown to TipTap-compatible HTML.
+
+    Why the HTML → MD → HTML round-trip on import: Drive's raw HTML encodes
+    bold/italic/etc. as inline styles on `<span>` tags. `markdownify` is the
+    only step that turns those style attributes back into semantic emphasis
+    (`**bold**`, `_italic_`). Rendering that Markdown back to HTML via
+    `python-markdown` yields exactly the tag set TipTap parses on the way
+    in (`<h1>`/`<p>`/`<strong>`/`<em>`/`<ul>`/`<blockquote>`/`<hr>`/...).
+    """
+    import markdown as md_lib  # local import — keep startup cheap
+
+    return await asyncio.to_thread(
+        md_lib.markdown,
+        md,
+        extensions=["extra", "sane_lists"],
+    )
+
+
 def project_drive_payload(folder_id: str, folder_url: str | None) -> dict[str, Any]:
     """Helper for the /drive/attach response."""
     return {"drive_folder_id": folder_id, "drive_folder_url": folder_url}
@@ -437,6 +456,7 @@ __all__ = [
     "get_connection",
     "google_doc_id_from_input",
     "html_to_markdown",
+    "markdown_to_html",
     "project_drive_payload",
     "refresh_access_token",
     "sign_state",

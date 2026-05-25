@@ -37,8 +37,10 @@ interface Props {
  * Content is stored as TipTap HTML (the backend's `body_markdown` field is
  * schema-agnostic; the `markdown` in its name predates the rich-text
  * editor and survives for backwards compat). The Drive importer runs
- * `markdownify` server-side to convert Google Doc HTML → Markdown, which
- * TipTap parses on the way in via the standard HTML parser.
+ * Drive HTML → Markdown (via `markdownify`, which folds Google Docs'
+ * inline-style spans into semantic emphasis) → HTML (via `python-markdown`)
+ * server-side, so what lands here is the same TipTap-compatible HTML the
+ * editor produces.
  *
  * Read-only mode hides the toolbar entirely (it'd just be dead clicks).
  */

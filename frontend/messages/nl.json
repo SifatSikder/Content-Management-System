@@ -351,7 +351,7 @@
     "import_no_matches": "Geen documenten gevonden voor je zoekopdracht.",
     "import_no_docs": "Geen Google Docs gevonden in je Drive.",
     "import_submit": "Importeren",
-    "import_succeeded": "Geïmporteerd als nieuwe scriptversie",
+    "import_succeeded": "Geladen in editor — klik op Nieuwe versie opslaan om te bewaren",
     "import_forbidden": "Drive geeft geen toegang tot dit document",
     "import_not_found": "Google Doc niet gevonden",
     "import_invalid_url": "Dit lijkt geen Google Docs-URL of ID te zijn"

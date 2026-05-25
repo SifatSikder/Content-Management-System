@@ -3,8 +3,8 @@ import { apiFetchAuthed, ApiError } from "@/lib/api-client";
 import type {
   AttachDriveBody,
   DriveConnection,
+  DriveDocumentContent,
   DriveDocumentListResponse,
-  ImportGdocBody,
   StartConnectResponse,
 } from "./types";
 
@@ -16,6 +16,19 @@ export function listDriveDocuments(
   if (query) params.set("q", query);
   params.set("limit", String(limit));
   return apiFetchAuthed<DriveDocumentListResponse>(`/drive/documents?${params}`);
+}
+
+/**
+ * Fetch one Google Doc as TipTap-compatible HTML. Does NOT create a script
+ * version — the editor loads this as an unsaved draft and the user persists
+ * it via the regular "Save new version" path.
+ */
+export function fetchDriveDocumentContent(
+  documentId: string,
+): Promise<DriveDocumentContent> {
+  return apiFetchAuthed<DriveDocumentContent>(
+    `/drive/documents/${encodeURIComponent(documentId)}/content`,
+  );
 }
 
 export function startDriveConnect(): Promise<StartConnectResponse> {
@@ -60,9 +73,3 @@ export function detachDriveFolder(projectId: string): Promise<unknown> {
   });
 }
 
-export function importGdoc(projectId: string, body: ImportGdocBody): Promise<unknown> {
-  return apiFetchAuthed(`/projects/${projectId}/scripts/import-gdoc`, {
-    method: "POST",
-    body: body as unknown as BodyInit,
-  });
-}

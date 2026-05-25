@@ -18,22 +18,15 @@ from app.auth.dependencies import (
     require_action,
     require_project_access,
 )
-from app.core.crypto import TokenDecryptionError, TokenEncryptionNotConfiguredError
 from app.models.project import ProjectModel
 from app.models.script import ScriptModel, ScriptVersionModel
-from app.schemas.drive import ImportGdocBody
 from app.schemas.script import (
     CommentPublic,
     CreateCommentBody,
     CreateVersionBody,
     VersionPublic,
 )
-from app.services import drive_service, script_service
-from app.services.drive_service import (
-    DriveNotConfiguredError,
-    GoogleApiError,
-    NotConnectedError,
-)
+from app.services import script_service
 from app.services.script_service import (
     IllegalStageTransitionError,
     ScriptCommentNotFoundError,
@@ -109,84 +102,6 @@ async def get_version(
     if script.project_id != project.id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Version not found")
 
-    return VersionPublic.model_validate(version)
-
-
-# ---------- Google Doc import ----------
-
-@projects_router.post(
-    "/import-gdoc",
-    response_model=VersionPublic,
-    status_code=status.HTTP_201_CREATED,
-    summary="Import a Google Doc as a new script version (per-user Drive OAuth)",
-)
-async def post_import_gdoc(
-    body: ImportGdocBody,
-    project: Annotated[ProjectModel, Depends(require_project_access(ProjectAccess.EDIT))],
-    user: CurrentUser,
-    session: SessionDep,
-) -> VersionPublic:
-    try:
-        document_id = drive_service.google_doc_id_from_input(body.document)
-    except ValueError as exc:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "Not a valid Google Doc ID or URL"
-        ) from exc
-
-    try:
-        access_token = await drive_service.access_token_for_user(session, user_id=user.id)
-    except NotConnectedError as exc:
-        raise HTTPException(
-            status.HTTP_412_PRECONDITION_FAILED,
-            "You haven't connected Google Drive yet. Visit Settings → Connect Drive.",
-        ) from exc
-    except (DriveNotConfiguredError, TokenEncryptionNotConfiguredError) as exc:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "Google Drive is not configured on this server",
-        ) from exc
-    except TokenDecryptionError as exc:
-        # Encryption key was rotated since this row was written — force reconnect.
-        await drive_service.delete_connection(session, user_id=user.id)
-        await session.commit()
-        raise HTTPException(
-            status.HTTP_412_PRECONDITION_FAILED,
-            "Your saved Drive credentials are stale. Reconnect from Settings.",
-        ) from exc
-
-    try:
-        html = await drive_service.export_doc_as_html(
-            document_id=document_id, access_token=access_token
-        )
-    except GoogleApiError as exc:
-        if exc.status_code in (401, 403):
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN,
-                "Drive denied access to that document",
-            ) from exc
-        if exc.status_code == 404:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND, "Google Doc not found"
-            ) from exc
-        raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY, "Google Drive returned an error"
-        ) from exc
-
-    markdown = await drive_service.html_to_markdown(html)
-    if not markdown.strip():
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "Imported Google Doc was empty",
-        )
-
-    try:
-        version = await script_service.add_version(
-            session, project=project, author=user, body_markdown=markdown
-        )
-    except IllegalStageTransitionError as exc:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-    await session.commit()
-    await session.refresh(version)
     return VersionPublic.model_validate(version)
 
 

@@ -210,14 +210,16 @@ export function ScriptTab({ project, role, isOwner, onProjectUpdated }: Props) {
             </Sheet>
             {canEdit && (
               <ImportGdocDialog
-                projectId={project.id}
-                onImported={async (version) => {
-                  setVersions((prev) => [...prev, version]);
-                  setCurrentId(version.id);
-                  setDraft(version.body_markdown ?? "");
-                  // Stage may have advanced (idea → script_drafting).
-                  const refreshed = await getProject(project.id);
-                  onProjectUpdated(refreshed);
+                onImported={(body) => {
+                  // Import loads the doc into the editor as an unsaved draft;
+                  // the user clicks "Save new version" to persist (that path
+                  // is also what advances the stage). If they were viewing an
+                  // older version, fast-forward to the latest so the editor
+                  // becomes editable for the new draft.
+                  if (versions.length > 0) {
+                    setCurrentId(versions[versions.length - 1].id);
+                  }
+                  setDraft(body);
                 }}
               />
             )}

@@ -1,10 +1,14 @@
 """Google Drive endpoints (Phase 3 Task 3.3).
 
-Two router instances, mirroring the scripts/edits split:
-- `auth_router`   — `/auth/google/drive/*` (per-user OAuth)
+Three router instances:
+- `auth_router`     — `/auth/google/drive/*` (per-user OAuth)
 - `projects_router` — `/projects/{id}/drive/*` (folder attach + detach)
+- `files_router`    — `/drive/*` (list user docs, fetch rendered HTML)
 
-Import-gdoc lives in `app.routes.scripts` because it produces a ScriptVersion.
+Doc-content fetch is intentionally **non-persisting**: it returns the
+TipTap-compatible HTML for one Doc but does not create a script version.
+The script editor loads that HTML as an unsaved draft; the user goes
+through the normal "Save new version" path to persist.
 """
 
 from __future__ import annotations
@@ -27,6 +31,7 @@ from app.models.project import ProjectModel
 from app.schemas.drive import (
     AttachDriveBody,
     DriveConnectionPublic,
+    DriveDocumentContent,
     DriveDocumentListResponse,
     DriveDocumentPublic,
     StartConnectResponse,
@@ -110,6 +115,74 @@ async def get_documents(
             for f in files
         ]
     )
+
+
+@files_router.get(
+    "/documents/{document_id}/content",
+    response_model=DriveDocumentContent,
+    summary="Fetch one Google Doc as TipTap-compatible HTML (no persistence)",
+)
+async def get_document_content(
+    document_id: str,
+    user: CurrentUser,
+    session: SessionDep,
+) -> DriveDocumentContent:
+    """Return the rendered HTML body of `document_id`.
+
+    Used by the script-import picker: the editor loads the result as an
+    unsaved draft and the user goes through the normal "Save new version"
+    flow to persist. No script version is created here.
+
+    Error map mirrors `get_documents` so the frontend can reuse the same
+    412 → reconnect / 403 → denied / 404 → missing branches.
+    """
+    try:
+        access_token = await drive_service.access_token_for_user(
+            session, user_id=user.id
+        )
+    except NotConnectedError as exc:
+        raise HTTPException(
+            status.HTTP_412_PRECONDITION_FAILED,
+            "Drive is not connected",
+        ) from exc
+    except (DriveNotConfiguredError, TokenEncryptionNotConfiguredError) as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Drive is not configured on this server",
+        ) from exc
+    except TokenDecryptionError as exc:
+        await drive_service.delete_connection(session, user_id=user.id)
+        await session.commit()
+        raise HTTPException(
+            status.HTTP_412_PRECONDITION_FAILED,
+            "Drive credentials are stale; reconnect",
+        ) from exc
+
+    try:
+        html = await drive_service.export_doc_as_html(
+            document_id=document_id, access_token=access_token
+        )
+    except GoogleApiError as exc:
+        if exc.status_code in (401, 403):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, "Drive denied access to that document"
+            ) from exc
+        if exc.status_code == 404:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, "Google Doc not found"
+            ) from exc
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, "Drive returned an error"
+        ) from exc
+
+    markdown = await drive_service.html_to_markdown(html)
+    if not markdown.strip():
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Google Doc was empty",
+        )
+    body = await drive_service.markdown_to_html(markdown)
+    return DriveDocumentContent(body=body)
 
 
 # ---------- per-user OAuth ----------

@@ -17,10 +17,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { ScriptVersion } from "@/features/capabilities/script_versioning/types";
 import {
+  fetchDriveDocumentContent,
   getDriveConnection,
-  importGdoc,
   listDriveDocuments,
   startDriveConnect,
 } from "@/features/drive/api";
@@ -28,8 +27,13 @@ import type { DriveDocument } from "@/features/drive/types";
 import { ApiError } from "@/lib/api-client";
 
 interface Props {
-  projectId: string;
-  onImported: (version: ScriptVersion) => void;
+  /**
+   * Called with the imported HTML body. Fires once the dialog has fetched
+   * the doc from Drive; the caller is expected to load this into the editor
+   * as an unsaved draft and rely on the regular "Save new version" path to
+   * persist. The dialog itself never creates a script version.
+   */
+  onImported: (body: string) => void;
   trigger?: React.ReactNode;
   disabled?: boolean;
 }
@@ -41,7 +45,7 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString();
 }
 
-export function ImportGdocDialog({ projectId, onImported, trigger, disabled }: Props) {
+export function ImportGdocDialog({ onImported, trigger, disabled }: Props) {
   const t = useTranslations("script");
   const tDrive = useTranslations("drive");
   const tErr = useTranslations("errors");
@@ -115,8 +119,8 @@ export function ImportGdocDialog({ projectId, onImported, trigger, disabled }: P
   async function pick(doc: DriveDocument) {
     setImportingId(doc.id);
     try {
-      const version = (await importGdoc(projectId, { document: doc.id })) as ScriptVersion;
-      onImported(version);
+      const { body } = await fetchDriveDocumentContent(doc.id);
+      onImported(body);
       toast.success(t("import_succeeded"));
       setOpen(false);
       setQuery("");

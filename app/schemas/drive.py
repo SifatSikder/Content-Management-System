@@ -28,17 +28,12 @@ class AttachDriveBody(BaseModel):
     folder_url: str | None = Field(default=None, max_length=2048)
 
 
-class ImportGdocBody(BaseModel):
-    """Either a Google Docs URL or a bare document ID is accepted."""
-
-    document: str = Field(min_length=10, max_length=2048)
-
-
 class DriveDocumentPublic(BaseModel):
     """One row in the Drive picker — what the script-import dialog renders.
 
     `web_view_link` is the user-facing URL (clickable to inspect the source
-    doc in Drive). `id` is what we pass back to `/scripts/import-gdoc`.
+    doc in Drive). `id` is what we hand back to
+    `GET /drive/documents/{id}/content` to fetch the rendered HTML body.
     """
 
     id: str
@@ -51,11 +46,23 @@ class DriveDocumentListResponse(BaseModel):
     items: list[DriveDocumentPublic]
 
 
+class DriveDocumentContent(BaseModel):
+    """Rendered body of a single Google Doc — fetch-only, no persistence.
+
+    Returned by `GET /drive/documents/{id}/content`. The script-import flow
+    loads this into the editor as an unsaved draft; persistence happens via
+    the normal `POST /projects/{id}/scripts` createVersion endpoint when
+    the user clicks "Save new version".
+    """
+
+    body: str
+
+
 __all__ = [
     "AttachDriveBody",
     "DriveConnectionPublic",
+    "DriveDocumentContent",
     "DriveDocumentListResponse",
     "DriveDocumentPublic",
-    "ImportGdocBody",
     "StartConnectResponse",
 ]

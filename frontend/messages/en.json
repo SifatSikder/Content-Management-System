@@ -351,7 +351,7 @@
     "import_no_matches": "No documents match your search.",
     "import_no_docs": "No Google Docs found in your Drive.",
     "import_submit": "Import",
-    "import_succeeded": "Imported as a new script version",
+    "import_succeeded": "Loaded into editor — Save new version to keep it",
     "import_forbidden": "Drive denied access to that document",
     "import_not_found": "Google Doc not found",
     "import_invalid_url": "That doesn't look like a Google Doc URL or ID"
