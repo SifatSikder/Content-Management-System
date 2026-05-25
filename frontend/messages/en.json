@@ -171,6 +171,7 @@
     "permissions_title": "Permissions",
     "permissions_subtitle": "Toggle which actions this role is allowed to perform. Rows are grouped by area.",
     "permissions_empty": "No actions available for this department yet.",
+    "permissions_count": "{allowed}/{total} permissions",
     "members_title": "Members",
     "members_subtitle": "People with access to this department. Adding someone here also grants them access to the business.",
     "members_empty": "No members yet.",

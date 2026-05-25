@@ -171,6 +171,7 @@
     "permissions_title": "Rechten",
     "permissions_subtitle": "Schakel in welke acties deze rol mag uitvoeren. Rijen zijn gegroepeerd per onderdeel.",
     "permissions_empty": "Nog geen acties beschikbaar voor deze afdeling.",
+    "permissions_count": "{allowed}/{total} rechten",
     "members_title": "Leden",
     "members_subtitle": "Mensen met toegang tot deze afdeling. Iemand hier toevoegen geeft ook toegang tot het bedrijf.",
     "members_empty": "Nog geen leden.",

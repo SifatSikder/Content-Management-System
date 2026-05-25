@@ -2,9 +2,10 @@
 
 import { Plus, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -25,9 +26,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PermissionMatrixEditor } from "@/features/departments/components/PermissionMatrixEditor";
+import { useDepartmentStages } from "@/features/departments/hooks/useDepartmentStages";
+import { availableActionKeys } from "@/features/departments/lib/permissionLabel";
 import {
   createRole,
   deleteRole,
+  listPermissions,
   listRoles,
 } from "@/features/departments/api";
 import type { Department, DepartmentRole } from "@/features/departments/types";
@@ -47,9 +51,21 @@ export function RoleEditor({ department }: { department: Department }) {
   const t = useTranslations("departments");
   const tCommon = useTranslations("common");
   const departmentId = department.id;
+  const { stages } = useDepartmentStages(departmentId);
   const [roles, setRoles] = useState<DepartmentRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
+  const [allowedCounts, setAllowedCounts] = useState<Map<string, number>>(
+    new Map(),
+  );
+
+  // Total actions available in this department — denominator for the
+  // "N/M permissions" badge. Recomputes when the template or stage list
+  // changes (e.g. a new stage transition broadens the matrix).
+  const totalActions = useMemo(
+    () => availableActionKeys(department.template_key, stages).length,
+    [department.template_key, stages],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,6 +82,41 @@ export function RoleEditor({ department }: { department: Department }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Fetch the allowed-permission count per role. One HTTP per role; with
+  // ~5-7 roles per department this is acceptable. `refreshCount(roleId)`
+  // is exposed downward so the matrix can re-pull just one role's count
+  // after a toggle without refetching all of them.
+  const refreshCount = useCallback(async (roleId: string) => {
+    try {
+      const res = await listPermissions(roleId);
+      const allowed = res.items.filter((p) => p.allowed).length;
+      setAllowedCounts((prev) => new Map(prev).set(roleId, allowed));
+    } catch {
+      // Silent — the count badge just stays at its previous value.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (roles.length === 0) return;
+    let cancelled = false;
+    Promise.all(
+      roles.map(async (r) => {
+        try {
+          const res = await listPermissions(r.id);
+          return [r.id, res.items.filter((p) => p.allowed).length] as const;
+        } catch {
+          return [r.id, 0] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (cancelled) return;
+      setAllowedCounts(new Map(entries));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [roles]);
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId) ?? null;
 
@@ -110,6 +161,12 @@ export function RoleEditor({ department }: { department: Department }) {
                         {r.key}
                       </div>
                     </div>
+                    <Badge variant="outline" className="font-normal">
+                      {t("permissions_count", {
+                        allowed: allowedCounts.get(r.id) ?? 0,
+                        total: totalActions,
+                      })}
+                    </Badge>
                     <Button
                       variant={isSelected ? "secondary" : "outline"}
                       size="sm"
@@ -144,6 +201,7 @@ export function RoleEditor({ department }: { department: Department }) {
                       <PermissionMatrixEditor
                         role={selectedRole}
                         department={department}
+                        onPermissionChanged={() => void refreshCount(selectedRole.id)}
                       />
                     </div>
                   ) : null}

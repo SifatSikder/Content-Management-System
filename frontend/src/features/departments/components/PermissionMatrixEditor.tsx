@@ -39,9 +39,16 @@ import { ApiError } from "@/lib/api-client";
 export function PermissionMatrixEditor({
   role,
   department,
+  onPermissionChanged,
 }: {
   role: DepartmentRole;
   department: Department;
+  /**
+   * Fires after a successful toggle, regardless of direction. The parent
+   * (RoleEditor) uses this to refresh the "N/M permissions" badge so it
+   * stays in sync with the matrix without a separate fetch.
+   */
+  onPermissionChanged?: () => void;
 }) {
   const t = useTranslations("departments");
   const tCommon = useTranslations("common");
@@ -136,6 +143,7 @@ export function PermissionMatrixEditor({
         const without = prev.filter((r) => r.action_key !== actionKey);
         return [...without, updated];
       });
+      onPermissionChanged?.();
     } catch (exc) {
       const msg = exc instanceof ApiError ? exc.message : tCommon("error");
       toast.error(msg);
