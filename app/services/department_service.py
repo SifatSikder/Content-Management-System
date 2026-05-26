@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import structlog
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,6 +44,17 @@ class TemplateNotFoundError(Exception):
 
 class SlugTakenError(Exception):
     """Another department already uses this slug in the business."""
+
+
+class RoleInUseError(Exception):
+    """Role still has member assignments and cannot be deleted."""
+
+    def __init__(self, role_id: uuid.UUID, member_count: int) -> None:
+        super().__init__(
+            f"role {role_id} has {member_count} member(s); reassign them before deleting"
+        )
+        self.role_id = role_id
+        self.member_count = member_count
 
 
 _SLUG_STRIP_RE = re.compile(r"[^a-z0-9]+")
@@ -306,6 +317,13 @@ async def update_role(
 async def delete_role(
     session: AsyncSession, *, role: DepartmentRoleModel
 ) -> None:
+    member_count = await session.scalar(
+        select(func.count())
+        .select_from(DepartmentMembershipModel)
+        .where(DepartmentMembershipModel.role_id == role.id)
+    )
+    if member_count:
+        raise RoleInUseError(role.id, int(member_count))
     await session.delete(role)
     await session.flush()
 
@@ -509,6 +527,7 @@ async def remove_department_member(
 
 __all__ = [
     "DepartmentNotFoundError",
+    "RoleInUseError",
     "RoleNotFoundError",
     "SlugTakenError",
     "TemplateNotFoundError",

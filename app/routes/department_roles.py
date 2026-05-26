@@ -122,5 +122,12 @@ async def delete_role(
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, "Role not in this department"
         )
-    await department_service.delete_role(session, role=role)
+    try:
+        await department_service.delete_role(session, role=role)
+    except department_service.RoleInUseError as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Cannot delete role: {exc.member_count} member(s) still assigned. "
+            "Reassign them to another role first.",
+        ) from exc
     await session.commit()
