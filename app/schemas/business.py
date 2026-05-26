@@ -42,10 +42,28 @@ class BusinessPublic(BaseModel):
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
+    # Short-lived signed GCS URL minted on response. None when no logo is
+    # uploaded. Re-fetch the parent resource when this expires (~15 min).
+    logo_url: str | None = None
 
 
 class BusinessListResponse(BaseModel):
     items: list[BusinessPublic]
+
+
+class InitLogoUploadBody(BaseModel):
+    content_type: str = Field(min_length=1, max_length=100)
+    size_bytes: int = Field(ge=1)
+
+
+class InitLogoUploadResponse(BaseModel):
+    upload_session_url: str
+    gcs_bucket: str
+    gcs_object_name: str
+
+
+class FinaliseLogoBody(BaseModel):
+    gcs_object_name: str = Field(min_length=1, max_length=512)
 
 
 class InviteBusinessMemberBody(BaseModel):
@@ -90,6 +108,7 @@ class MeBusinessEntry(BaseModel):
     slug: str
     is_owner: bool
     membership_status: BusinessMembershipStatus | None = None
+    logo_url: str | None = None
 
 
 class MeBusinessesResponse(BaseModel):
@@ -102,6 +121,9 @@ __all__ = [
     "BusinessMembershipPublic",
     "BusinessPublic",
     "CreateBusinessBody",
+    "FinaliseLogoBody",
+    "InitLogoUploadBody",
+    "InitLogoUploadResponse",
     "InviteBusinessMemberBody",
     "MeBusinessEntry",
     "MeBusinessesResponse",

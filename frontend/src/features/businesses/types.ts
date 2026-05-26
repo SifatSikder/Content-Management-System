@@ -13,6 +13,13 @@ export interface Business {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  logo_url: string | null;
+}
+
+export interface InitLogoUploadResponse {
+  upload_session_url: string;
+  gcs_bucket: string;
+  gcs_object_name: string;
 }
 
 export interface BusinessListResponse {
@@ -35,6 +42,7 @@ export interface MeBusinessEntry {
   slug: string;
   is_owner: boolean;
   membership_status: BusinessMembershipStatus | null;
+  logo_url: string | null;
 }
 
 export interface MeBusinessesResponse {

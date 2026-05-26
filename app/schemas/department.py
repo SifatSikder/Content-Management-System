@@ -209,7 +209,7 @@ class DepartmentMembershipPublic(BaseModel):
     updated_at: datetime
 
     @classmethod
-    def from_orm_row(cls, row: object) -> "DepartmentMembershipPublic":
+    def from_orm_row(cls, row: object) -> DepartmentMembershipPublic:
         """Construct from a `DepartmentMembershipModel` with its
         `business_membership` relation eagerloaded.
 

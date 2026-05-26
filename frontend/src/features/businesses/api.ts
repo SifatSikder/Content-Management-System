@@ -4,6 +4,7 @@ import type {
   Business,
   BusinessListResponse,
   CreateBusinessBody,
+  InitLogoUploadResponse,
   MeBusinessesResponse,
   UpdateBusinessBody,
 } from "./types";
@@ -32,6 +33,35 @@ export function updateBusiness(id: string, body: UpdateBusinessBody): Promise<Bu
 
 export function deleteBusiness(id: string): Promise<void> {
   return apiFetchAuthed<void>(`/businesses/${id}`, { method: "DELETE" });
+}
+
+export function createLogoUploadSession(
+  businessId: string,
+  body: { content_type: string; size_bytes: number },
+): Promise<InitLogoUploadResponse> {
+  return apiFetchAuthed<InitLogoUploadResponse>(
+    `/businesses/${businessId}/logo/upload-session`,
+    {
+      method: "POST",
+      body: body as unknown as BodyInit,
+    },
+  );
+}
+
+export function finaliseLogoUpload(
+  businessId: string,
+  body: { gcs_object_name: string },
+): Promise<Business> {
+  return apiFetchAuthed<Business>(`/businesses/${businessId}/logo/finalise`, {
+    method: "POST",
+    body: body as unknown as BodyInit,
+  });
+}
+
+export function removeBusinessLogo(businessId: string): Promise<Business> {
+  return apiFetchAuthed<Business>(`/businesses/${businessId}/logo`, {
+    method: "DELETE",
+  });
 }
 
 export function listMyBusinesses(): Promise<MeBusinessesResponse> {

@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/hooks/useAuth";
+import { BusinessLogo } from "@/features/businesses/components/BusinessLogo";
 import { useBusinesses } from "@/features/businesses/hooks/useBusinesses";
 import { DepartmentList } from "@/features/departments/components/DepartmentList";
 
@@ -49,7 +50,12 @@ export default function BusinessDashboardPage() {
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-8 p-6">
-      <header>
+      <header className="flex items-center gap-4">
+        <BusinessLogo
+          logoUrl={business.logo_url}
+          name={business.name}
+          size={48}
+        />
         <h1 className="text-2xl font-semibold tracking-tight">{business.name}</h1>
       </header>
       <DepartmentList

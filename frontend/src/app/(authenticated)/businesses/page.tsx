@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -20,15 +20,16 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useAuth } from "@/features/auth/hooks/useAuth";
+import { BusinessLogo } from "@/features/businesses/components/BusinessLogo";
 import { CreateBusinessDialog } from "@/features/businesses/components/CreateBusinessDialog";
 import { DeleteBusinessDialog } from "@/features/businesses/components/DeleteBusinessDialog";
-import { RenameBusinessDialog } from "@/features/businesses/components/RenameBusinessDialog";
+import { EditBusinessDialog } from "@/features/businesses/components/EditBusinessDialog";
 import { useBusinesses } from "@/features/businesses/hooks/useBusinesses";
 import type { MeBusinessEntry } from "@/features/businesses/types";
 
 type DialogState =
   | { kind: "none" }
-  | { kind: "rename"; business: MeBusinessEntry }
+  | { kind: "edit"; business: MeBusinessEntry }
   | { kind: "delete"; business: MeBusinessEntry };
 
 export default function BusinessesPage() {
@@ -81,7 +82,7 @@ export default function BusinessesPage() {
               key={b.id}
               className="hover:bg-accent/40 group flex items-center gap-3 px-4 py-3 transition-colors"
             >
-              <Building2 className="text-muted-foreground size-4 shrink-0" />
+              <BusinessLogo logoUrl={b.logo_url} name={b.name} size={28} />
               <Link
                 href={`/businesses/${b.slug}`}
                 aria-label={t("row_open_aria", { name: b.name })}
@@ -97,16 +98,16 @@ export default function BusinessesPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          aria-label={t("rename_action")}
+                          aria-label={t("edit_action")}
                           onClick={() =>
-                            setDialog({ kind: "rename", business: b })
+                            setDialog({ kind: "edit", business: b })
                           }
                           className="size-8"
                         >
                           <Pencil className="size-4" />
                         </Button>
                       </TooltipTrigger>
-                      <TooltipContent>{t("rename_action")}</TooltipContent>
+                      <TooltipContent>{t("edit_action")}</TooltipContent>
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -132,12 +133,16 @@ export default function BusinessesPage() {
         </ul>
       )}
 
-      {dialog.kind === "rename" ? (
-        <RenameBusinessDialog
-          business={{ id: dialog.business.id, name: dialog.business.name }}
+      {dialog.kind === "edit" ? (
+        <EditBusinessDialog
+          business={{
+            id: dialog.business.id,
+            name: dialog.business.name,
+            logo_url: dialog.business.logo_url,
+          }}
           open
           onOpenChange={(o) => (o ? null : closeDialog())}
-          onRenamed={() => void reload()}
+          onSaved={() => void reload()}
         />
       ) : null}
       {dialog.kind === "delete" ? (

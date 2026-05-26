@@ -25,7 +25,7 @@ from app.models.enums import BusinessMembershipStatus
 from app.schemas.business import MeBusinessEntry, MeBusinessesResponse
 from app.schemas.department import MeDepartmentEntry, MeDepartmentsResponse
 from app.schemas.permission import MePermissionsResponse
-from app.services import permission_service
+from app.services import business_service, permission_service
 
 router = APIRouter(prefix="/me", tags=["me"])
 log = structlog.get_logger(__name__)
@@ -58,6 +58,7 @@ async def get_my_businesses(
                 slug=b.slug,
                 is_owner=b.owner_user_id == user.id,
                 membership_status=BusinessMembershipStatus.ACTIVE,
+                logo_url=await business_service.build_signed_logo_url(b),
             )
             for b in result.scalars().all()
         ]
@@ -82,6 +83,7 @@ async def get_my_businesses(
             slug=b.slug,
             is_owner=b.owner_user_id == user.id,
             membership_status=status,
+            logo_url=await business_service.build_signed_logo_url(b),
         )
         for b, status in rows.all()
     ]

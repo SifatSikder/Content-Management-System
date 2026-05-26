@@ -12,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { BusinessLogo } from "@/features/businesses/components/BusinessLogo";
 import { CreateBusinessDialog } from "@/features/businesses/components/CreateBusinessDialog";
 import { useCurrentBusiness } from "@/features/businesses/hooks/useCurrentBusiness";
 
@@ -36,7 +37,16 @@ export function BusinessSwitcher({ canCreate }: { canCreate: boolean }) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="sm">
-          <Building2 className="mr-2 size-4" />
+          {current ? (
+            <BusinessLogo
+              logoUrl={current.logo_url}
+              name={current.name}
+              size={20}
+              className="mr-2"
+            />
+          ) : (
+            <Building2 className="mr-2 size-4" />
+          )}
           <span className="max-w-[180px] truncate">
             {current?.name ?? t("none_selected")}
           </span>
@@ -54,7 +64,10 @@ export function BusinessSwitcher({ canCreate }: { canCreate: boolean }) {
               onClick={() => setCurrent(b.id)}
               className="justify-between"
             >
-              <span className="truncate">{b.name}</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <BusinessLogo logoUrl={b.logo_url} name={b.name} size={18} />
+                <span className="truncate">{b.name}</span>
+              </span>
               {current?.id === b.id ? <Check className="size-4" /> : null}
             </DropdownMenuItem>
           ))

@@ -31,6 +31,12 @@ class BusinessModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )
+    # GCS object key for the business logo, e.g.
+    # `businesses/<business_id>/logo-<uuid>.png`. Signed read URLs are
+    # minted on response — never stored.
+    logo_object_name: Mapped[str | None] = mapped_column(
+        String(512), nullable=True
+    )
 
 
 __all__ = ["BusinessModel"]

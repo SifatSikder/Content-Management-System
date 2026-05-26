@@ -151,6 +151,114 @@ async def soft_delete_business(
     return business
 
 
+# --- Logo --------------------------------------------------------------------
+
+ALLOWED_LOGO_CONTENT_TYPES: dict[str, str] = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/webp": ".webp",
+}
+MAX_LOGO_SIZE_BYTES = 2 * 1024 * 1024
+LOGO_URL_TTL_SECONDS = 15 * 60
+
+
+class LogoContentTypeNotAllowedError(Exception):
+    """Caller asked to upload a logo with an unsupported MIME type."""
+
+
+class LogoTooLargeError(Exception):
+    """Declared upload size exceeds MAX_LOGO_SIZE_BYTES."""
+
+
+class LogoBlobMissingError(Exception):
+    """Caller tried to finalise a logo before the GCS PUT completed."""
+
+
+def _logo_object_name(business_id: uuid.UUID, content_type: str) -> str:
+    """Stable per-upload object key.
+
+    A UUID suffix means each upload writes to a new key — previous logos
+    become orphans but the browser-cached signed URL of the old key keeps
+    working until expiry, so no flash-of-broken-image during swap.
+    """
+    ext = ALLOWED_LOGO_CONTENT_TYPES[content_type]
+    return f"businesses/{business_id}/logo-{uuid.uuid4()}{ext}"
+
+
+async def mint_logo_upload_session(
+    *,
+    business: BusinessModel,
+    content_type: str,
+    size_bytes: int,
+    origin: str | None = None,
+) -> tuple[str, str, str]:
+    """Return (session_url, bucket, object_name) for a logo upload."""
+    if content_type not in ALLOWED_LOGO_CONTENT_TYPES:
+        raise LogoContentTypeNotAllowedError(content_type)
+    if size_bytes > MAX_LOGO_SIZE_BYTES:
+        raise LogoTooLargeError(str(size_bytes))
+
+    from app.config import get_settings
+    from app.services import storage_service
+
+    bucket = get_settings().gcs_bucket_assets
+    object_name = _logo_object_name(business.id, content_type)
+    session_url = await storage_service.create_resumable_upload_session(
+        bucket_name=bucket,
+        object_name=object_name,
+        content_type=content_type,
+        size_bytes=size_bytes,
+        origin=origin,
+    )
+    return session_url, bucket, object_name
+
+
+async def finalise_logo_upload(
+    session: AsyncSession,
+    *,
+    business: BusinessModel,
+    object_name: str,
+) -> BusinessModel:
+    """Verify the GCS blob exists, then point the business at it."""
+    from app.config import get_settings
+    from app.services import storage_service
+
+    bucket = get_settings().gcs_bucket_assets
+    if not await storage_service.blob_exists(
+        bucket_name=bucket, object_name=object_name
+    ):
+        raise LogoBlobMissingError(object_name)
+    business.logo_object_name = object_name
+    await session.flush()
+    return business
+
+
+async def remove_logo(
+    session: AsyncSession, *, business: BusinessModel
+) -> BusinessModel:
+    """Clear the logo pointer. The orphan blob is left to lifecycle rules."""
+    if business.logo_object_name is not None:
+        business.logo_object_name = None
+        await session.flush()
+    return business
+
+
+async def build_signed_logo_url(business: BusinessModel) -> str | None:
+    """Mint a short-lived signed read URL for the business logo, if any."""
+    if business.logo_object_name is None:
+        return None
+    from app.config import get_settings
+    from app.services import storage_service
+
+    bucket = get_settings().gcs_bucket_assets
+    return await storage_service.signed_read_url(
+        bucket_name=bucket,
+        object_name=business.logo_object_name,
+        expires_in_seconds=LOGO_URL_TTL_SECONDS,
+        response_content_disposition="inline",
+    )
+
+
 # --- Memberships -------------------------------------------------------------
 
 
@@ -290,18 +398,28 @@ async def set_business_membership_status(
 
 
 __all__ = [
+    "ALLOWED_LOGO_CONTENT_TYPES",
+    "LOGO_URL_TTL_SECONDS",
+    "MAX_LOGO_SIZE_BYTES",
     "BusinessNotFoundError",
     "CannotRevokeCeoError",
+    "LogoBlobMissingError",
+    "LogoContentTypeNotAllowedError",
+    "LogoTooLargeError",
     "MembershipAlreadyExistsError",
-    "set_business_membership_status",
     "SlugTakenError",
     "UserNotFoundError",
+    "build_signed_logo_url",
     "create_business",
+    "finalise_logo_upload",
     "get_business",
     "invite_member_by_email",
     "list_businesses",
     "list_memberships",
+    "mint_logo_upload_session",
+    "remove_logo",
     "revoke_membership",
+    "set_business_membership_status",
     "slugify",
     "soft_delete_business",
     "update_business",
