@@ -1,6 +1,6 @@
 "use client";
 
-import { FolderKanban, Plus } from "lucide-react";
+import { FolderKanban, Pencil, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
@@ -8,12 +8,6 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -26,9 +20,23 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { createDepartment } from "@/features/departments/api";
+import { DeleteDepartmentDialog } from "@/features/departments/components/DeleteDepartmentDialog";
+import { RenameDepartmentDialog } from "@/features/departments/components/RenameDepartmentDialog";
 import { useDepartments } from "@/features/departments/hooks/useDepartments";
+import type { Department } from "@/features/departments/types";
 import { ApiError } from "@/lib/api-client";
+
+type DialogState =
+  | { kind: "none" }
+  | { kind: "edit"; department: Department }
+  | { kind: "delete"; department: Department };
 
 export function DepartmentList({
   businessId,
@@ -41,6 +49,11 @@ export function DepartmentList({
 }) {
   const t = useTranslations("departments");
   const { status, items, reload } = useDepartments(businessId);
+  const [dialog, setDialog] = useState<DialogState>({ kind: "none" });
+
+  function closeDialog() {
+    setDialog({ kind: "none" });
+  }
 
   return (
     <section className="space-y-4">
@@ -52,44 +65,89 @@ export function DepartmentList({
       </header>
 
       {status === "loading" ? (
-        <div className="grid gap-3 md:grid-cols-2">
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
+        <div className="space-y-2">
+          <Skeleton className="h-14" />
+          <Skeleton className="h-14" />
         </div>
       ) : items.length === 0 ? (
         <p className="text-muted-foreground text-sm">{t("empty")}</p>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <ul className="divide-border bg-card divide-y rounded-xl border">
           {items.map((d) => (
-            <Link
+            <li
               key={d.id}
-              href={`/businesses/${businessSlug}/departments/${d.id}`}
-              className="focus-visible:ring-ring rounded-xl focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+              className="hover:bg-accent/40 group flex items-center gap-3 px-4 py-3 transition-colors"
             >
-              <Card className="hover:border-ring h-full transition-colors">
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <FolderKanban className="size-4" />
-                        <span className="truncate">{d.name}</span>
-                      </CardTitle>
-                    </div>
-                    {d.archived_at ? (
-                      <Badge variant="outline">{t("archived")}</Badge>
-                    ) : null}
+              <FolderKanban className="text-muted-foreground size-4 shrink-0" />
+              <Link
+                href={`/businesses/${businessSlug}/departments/${d.id}`}
+                aria-label={t("row_open_aria", { name: d.name })}
+                className="focus-visible:ring-ring -mx-1 flex min-w-0 flex-1 items-center gap-2 truncate rounded px-1 text-sm font-medium focus-visible:ring-2 focus-visible:outline-none"
+              >
+                <span className="truncate">{d.name}</span>
+                {d.archived_at ? (
+                  <Badge variant="outline">{t("archived")}</Badge>
+                ) : null}
+              </Link>
+              {canEdit ? (
+                <TooltipProvider delayDuration={150}>
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={t("edit_action")}
+                          onClick={() =>
+                            setDialog({ kind: "edit", department: d })
+                          }
+                          className="size-8"
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{t("edit_action")}</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={t("delete_action")}
+                          onClick={() =>
+                            setDialog({ kind: "delete", department: d })
+                          }
+                          className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 size-8"
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{t("delete_action")}</TooltipContent>
+                    </Tooltip>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-muted-foreground font-mono text-xs">
-                    {d.template_key ?? "—"}
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
+                </TooltipProvider>
+              ) : null}
+            </li>
           ))}
-        </div>
+        </ul>
       )}
+
+      {dialog.kind === "edit" ? (
+        <RenameDepartmentDialog
+          department={{ id: dialog.department.id, name: dialog.department.name }}
+          open
+          onOpenChange={(o) => (o ? null : closeDialog())}
+          onRenamed={() => void reload()}
+        />
+      ) : null}
+      {dialog.kind === "delete" ? (
+        <DeleteDepartmentDialog
+          department={{ id: dialog.department.id, name: dialog.department.name }}
+          open
+          onOpenChange={(o) => (o ? null : closeDialog())}
+          onDeleted={() => void reload()}
+        />
+      ) : null}
     </section>
   );
 }
