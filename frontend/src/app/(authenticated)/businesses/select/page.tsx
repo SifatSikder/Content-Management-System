@@ -15,7 +15,8 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/hooks/useAuth";
-import { useCurrentBusiness } from "@/features/businesses/hooks/useCurrentBusiness";
+import { useBusinesses } from "@/features/businesses/hooks/useBusinesses";
+import { ATLAS_BUSINESS_COOKIE } from "@/features/businesses/hooks/useCurrentBusiness";
 
 /**
  * Onboarding screen for users with zero business memberships. CEO super-
@@ -26,7 +27,7 @@ export default function SelectBusinessPage() {
   const t = useTranslations("businesses");
   const router = useRouter();
   const auth = useAuth();
-  const { status, businesses, setCurrent } = useCurrentBusiness();
+  const { status, items: businesses } = useBusinesses();
 
   // If the user is the CEO or already has a business pinned in cookie/state,
   // bounce them out — they shouldn't be here.
@@ -35,6 +36,14 @@ export default function SelectBusinessPage() {
       router.replace("/projects");
     }
   }, [auth.user, router]);
+
+  function pick(id: string) {
+    // Single full-page navigation: set the cookie, then hard-redirect to
+    // /projects. Using router.replace + location.reload races and one of
+    // them aborts, leaving the user stuck on this page.
+    document.cookie = `${ATLAS_BUSINESS_COOKIE}=${encodeURIComponent(id)}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`;
+    window.location.href = "/projects";
+  }
 
   return (
     <div className="mx-auto flex min-h-[60vh] w-full max-w-md flex-col justify-center p-6">
@@ -57,10 +66,7 @@ export default function SelectBusinessPage() {
                 key={b.id}
                 variant="outline"
                 className="w-full justify-start"
-                onClick={() => {
-                  setCurrent(b.id);
-                  router.replace("/projects");
-                }}
+                onClick={() => pick(b.id)}
               >
                 {b.name}
               </Button>

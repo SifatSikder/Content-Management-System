@@ -12,6 +12,12 @@ const CONTENT_CREATION_ACTIONS: readonly string[] = [
   "script_versioning.unlock",
   "asset_review_with_timecodes.approve",
   "asset_review_with_timecodes.request_changes",
+  "location.lock",
+  "casting.lock",
+  "raw_cut.submit",
+  "department.edit_handoffs",
+  "idea_versioning.lock",
+  "idea_versioning.signoff",
 ];
 
 const MARKETING_ACTIONS: readonly string[] = [

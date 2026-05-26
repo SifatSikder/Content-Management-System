@@ -13,9 +13,12 @@ import type {
   Permission,
   PermissionListResponse,
   RoleListResponse,
+  StageHandoff,
+  StageHandoffListResponse,
   UpdateDepartmentBody,
   UpdateRoleBody,
   UpsertPermissionBody,
+  UpsertStageHandoffBody,
 } from "./types";
 
 // --- Departments ---------------------------------------------------------
@@ -170,4 +173,27 @@ export function listMyDepartments(
 ): Promise<MeDepartmentsResponse> {
   const usp = new URLSearchParams({ business_id: businessId });
   return apiFetchAuthed<MeDepartmentsResponse>(`/me/departments?${usp.toString()}`);
+}
+
+// --- Stage handoffs ------------------------------------------------------
+
+export function listStageHandoffs(
+  departmentId: string,
+): Promise<StageHandoffListResponse> {
+  return apiFetchAuthed<StageHandoffListResponse>(
+    `/departments/${departmentId}/stage-handoffs`,
+  );
+}
+
+export function upsertStageHandoff(
+  departmentId: string,
+  body: UpsertStageHandoffBody,
+): Promise<StageHandoff> {
+  return apiFetchAuthed<StageHandoff>(
+    `/departments/${departmentId}/stage-handoffs`,
+    {
+      method: "PUT",
+      body: body as unknown as BodyInit,
+    },
+  );
 }

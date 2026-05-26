@@ -82,6 +82,10 @@ class ProjectPublic(BaseModel):
     due_date: date | None
     script_locked_at: datetime | None
     script_locked_by: uuid.UUID | None
+    location_locked_at: datetime | None = None
+    location_locked_by: uuid.UUID | None = None
+    casting_locked_at: datetime | None = None
+    casting_locked_by: uuid.UUID | None = None
     drive_folder_id: str | None = None
     drive_folder_url: str | None = None
     created_at: datetime

@@ -64,3 +64,10 @@ export function getPhotoUrl(photoId: string): Promise<{ url: string; expires_in_
     `/locations/photos/${photoId}/url`,
   );
 }
+
+export function lockProjectLocation(projectId: string): Promise<{ status: string }> {
+  return apiFetchAuthed<{ status: string }>(
+    `/projects/${projectId}/locations/lock`,
+    { method: "POST" },
+  );
+}

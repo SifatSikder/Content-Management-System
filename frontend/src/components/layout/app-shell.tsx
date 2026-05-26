@@ -21,6 +21,7 @@ import {
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import type { AuthUser } from "@/features/auth/types";
 import { useAuth } from "@/features/auth/hooks/useAuth";
+import { useMyBusinessRole } from "@/features/auth/hooks/useMyBusinessRole";
 import { BusinessSwitcher } from "@/features/businesses/components/BusinessSwitcher";
 import { cn } from "@/lib/utils";
 
@@ -87,10 +88,10 @@ function NavList({ role, onNavigate }: { role: string; onNavigate?: () => void }
 function UserMenu({ user }: { user: AuthUser }) {
   const tShell = useTranslations("shell");
   const tAuth = useTranslations("auth");
-  const tRoles = useTranslations("roles");
   const tToast = useTranslations("toast");
   const router = useRouter();
   const auth = useAuth();
+  const businessRole = useMyBusinessRole();
   const handleLogout = async () => {
     const { toast } = await import("sonner");
     await auth.logout();
@@ -113,9 +114,15 @@ function UserMenu({ user }: { user: AuthUser }) {
           <div className="flex flex-col">
             <span className="text-sm font-medium">{user.name}</span>
             <span className="text-muted-foreground text-xs">{user.email}</span>
-            <Badge variant="outline" className="mt-2 w-fit">
-              {tRoles(user.role)}
-            </Badge>
+            {user.role === "ceo" ? (
+              <Badge variant="outline" className="mt-2 w-fit">
+                CEO
+              </Badge>
+            ) : businessRole ? (
+              <Badge variant="outline" className="mt-2 w-fit">
+                {businessRole}
+              </Badge>
+            ) : null}
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />

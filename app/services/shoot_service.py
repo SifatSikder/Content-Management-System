@@ -172,8 +172,16 @@ async def transition_shoot(
         },
     )
 
-    # Spec §4 row 9: wrap shoot → shoot_done.
-    if target == ShootStatus.WRAPPED and project.stage_key == "shoot_scheduled":
+    # Starting a shoot moves the project from shoot_schedule → shoot_in_progress.
+    if target == ShootStatus.IN_PROGRESS and project.stage_key == "shoot_schedule":
+        await _advance_stage(
+            session, project=project, target_key="shoot_in_progress", actor_id=actor.id
+        )
+    # Wrapping a shoot moves the project from shoot_in_progress → shoot_done.
+    elif target == ShootStatus.WRAPPED and project.stage_key in (
+        "shoot_in_progress",
+        "shoot_schedule",
+    ):
         await _advance_stage(
             session, project=project, target_key="shoot_done", actor_id=actor.id
         )

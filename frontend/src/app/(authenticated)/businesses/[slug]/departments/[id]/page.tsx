@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getDepartment, updateDepartment } from "@/features/departments/api";
 import { DepartmentMembersEditor } from "@/features/departments/components/DepartmentMembersEditor";
 import { RoleEditor } from "@/features/departments/components/RoleEditor";
+import { StageHandoffsEditor } from "@/features/departments/components/StageHandoffsEditor";
 import type { Department } from "@/features/departments/types";
 import { ApiError } from "@/lib/api-client";
 
@@ -158,12 +159,19 @@ export default function DepartmentDetailPage() {
             <TabsList className="w-full">
               <TabsTrigger value="roles">{t("roles_title")}</TabsTrigger>
               <TabsTrigger value="members">{t("members_title")}</TabsTrigger>
+              <TabsTrigger value="handoffs">Handoffs</TabsTrigger>
             </TabsList>
             <TabsContent value="roles" className="mt-4">
               <RoleEditor department={department} />
             </TabsContent>
             <TabsContent value="members" className="mt-4">
               <DepartmentMembersEditor departmentId={department.id} />
+            </TabsContent>
+            <TabsContent value="handoffs" className="mt-4">
+              <StageHandoffsEditor
+                departmentId={department.id}
+                templateKey={department.template_key}
+              />
             </TabsContent>
           </Tabs>
         </CardContent>

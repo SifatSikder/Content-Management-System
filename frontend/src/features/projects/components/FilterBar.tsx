@@ -25,7 +25,7 @@ interface Props {
   role: Role;
   mine: boolean;
   setMine: (v: boolean) => void;
-  /** Stage key (e.g. "idea") or "all" for no filter. */
+  /** Stage key (e.g. "draft_idea") or "all" for no filter. */
   stage: string;
   setStage: (v: string) => void;
   onCreated: (p: Project) => void;

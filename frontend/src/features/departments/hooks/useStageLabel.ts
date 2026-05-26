@@ -6,7 +6,7 @@ import { useMemo } from "react";
 import { useTemplateStages } from "@/features/departments/hooks/useTemplateStages";
 
 /**
- * Resolve a stage `key` (e.g. `"idea"`) to its localized display name
+ * Resolve a stage `key` (e.g. `"draft_idea"`) to its localized display name
  * within a department template.
  *
  * Returns a lookup function so callers can render many stage labels from

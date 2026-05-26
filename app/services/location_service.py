@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -72,13 +72,10 @@ async def create_location(
         metadata={"location_id": str(location.id), "address": address},
     )
 
-    # First location on the project nudges the stage forward from idea/script
-    # phases into "location_scouting". We don't auto-advance past scouting
-    # until the location is confirmed (see `confirm_location`).
-    if project.stage_key in ("script_locked", "script_review", "script_drafting", "idea"):
-        await _advance_stage(
-            session, project=project, target_key="location_scouting", actor_id=actor.id
-        )
+    # Location scouting is the entry stage of the new content_creation flow,
+    # so creating a location no longer needs to auto-advance — the project
+    # is already there. Advancing to draft_idea is gated by the explicit
+    # `Lock Location` action (added in Phase 3).
 
     return location
 
@@ -149,12 +146,41 @@ async def confirm_location(
         metadata={"location_id": str(location.id)},
     )
 
-    # Spec §4 row 6: "Location confirmed" auto-advances location_scouting → casting.
-    if confirmed and project.stage_key == "location_scouting":
-        await _advance_stage(
-            session, project=project, target_key="casting", actor_id=actor.id
-        )
     return location
+
+
+class LocationLockError(Exception):
+    """Raised when `lock_location` is called from an invalid stage."""
+
+
+async def lock_location(
+    session: AsyncSession, *, project: ProjectModel, actor: UserModel
+) -> ProjectModel:
+    """Explicit lock action — stamps `projects.location_locked_at/by` and
+    advances the project from `location_scouting` to `draft_idea`.
+
+    Idempotent: calling on a project already past `location_scouting` just
+    re-stamps the columns (so the audit trail reflects who pressed the
+    button most recently); calling on a project still on `location_scouting`
+    additionally fires the stage advance.
+    """
+    if project.stage_key not in ("location_scouting", "draft_idea"):
+        raise LocationLockError(
+            f"Cannot lock location from stage {project.stage_key}"
+        )
+    project.location_locked_at = datetime.now(UTC)
+    project.location_locked_by = actor.id
+    if project.stage_key == "location_scouting":
+        await _advance_stage(
+            session, project=project, target_key="draft_idea", actor_id=actor.id
+        )
+    await activity_service.record(
+        session,
+        project_id=project.id,
+        actor_id=actor.id,
+        action="location.locked",
+    )
+    return project
 
 
 async def delete_location(
@@ -233,6 +259,7 @@ async def delete_photo(
 
 
 __all__ = [
+    "LocationLockError",
     "LocationNotFoundError",
     "LocationPhotoNotFoundError",
     "attach_photo",
@@ -243,5 +270,6 @@ __all__ = [
     "get_location",
     "get_photo",
     "list_locations",
+    "lock_location",
     "update_location",
 ]

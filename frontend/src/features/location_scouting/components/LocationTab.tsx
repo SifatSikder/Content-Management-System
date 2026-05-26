@@ -24,6 +24,7 @@ import {
   listLocations,
   unconfirmLocation,
 } from "@/features/location_scouting/api";
+import { LockLocationButton } from "@/features/location_scouting/components/LockLocationButton";
 import { performResumableUpload } from "@/features/asset_review_with_timecodes/lib/resumable-upload";
 import type { Location, LocationPhoto } from "@/features/location_scouting/types";
 import type { Project } from "@/features/projects/types";
@@ -90,6 +91,9 @@ export function LocationTab({ project }: Props) {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-end">
+        <LockLocationButton project={project} />
+      </div>
       <Card className="p-4">
         <form className="space-y-3" onSubmit={onCreate}>
           <div className="space-y-1.5">

@@ -14,6 +14,7 @@ import type { ComponentType } from "react";
 
 import { EditsTab } from "@/features/asset_review_with_timecodes/components/EditsTab";
 import { ShootTab } from "@/features/event_scheduling/components/ShootTab";
+import { IdeaTab } from "@/features/idea_versioning/components/IdeaTab";
 import { LocationTab } from "@/features/location_scouting/components/LocationTab";
 import { ParticipantRosterTab } from "@/features/participant_roster/ParticipantRosterTab";
 import { ScriptTab } from "@/features/script_versioning/components/ScriptTab";
@@ -41,16 +42,22 @@ export interface TabEntry {
 
 const CONTENT_CREATION_TABS: TabEntry[] = [
   {
-    key: "script_versioning",
-    tabLabelKey: "tab_script",
-    name: "Script",
-    ProjectTab: ScriptTab,
-  },
-  {
     key: "location_scouting",
     tabLabelKey: "tab_location",
     name: "Locations",
     ProjectTab: LocationTab,
+  },
+  {
+    key: "idea_versioning",
+    tabLabelKey: "tab_idea",
+    name: "Idea",
+    ProjectTab: IdeaTab,
+  },
+  {
+    key: "script_versioning",
+    tabLabelKey: "tab_script",
+    name: "Script",
+    ProjectTab: ScriptTab,
   },
   {
     key: "participant_roster",

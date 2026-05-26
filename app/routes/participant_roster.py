@@ -14,6 +14,7 @@ from app.auth.dependencies import (
     ProjectAccess,
     SessionDep,
     _user_can_access_project,
+    require_action,
     require_project_access,
 )
 from app.config import get_settings
@@ -29,7 +30,7 @@ from app.schemas.cast_member import (
     UpdateCastMemberBody,
 )
 from app.services import cast_service, storage_service
-from app.services.cast_service import CastMemberNotFoundError
+from app.services.cast_service import CastMemberNotFoundError, CastingLockError
 
 log = structlog.get_logger(__name__)
 
@@ -92,6 +93,28 @@ async def get_cast(
 ) -> list[CastMemberPublic]:
     cast = await cast_service.list_cast_members(session, project_id=project.id)
     return [CastMemberPublic.model_validate(c) for c in cast]
+
+
+# ---------- explicit lock action ----------
+
+@projects_router.post(
+    "/lock",
+    summary="Lock casting and advance the project (casting.lock action)",
+    dependencies=[Depends(require_action("casting.lock"))],
+)
+async def post_lock_casting(
+    project: Annotated[
+        ProjectModel, Depends(require_project_access(ProjectAccess.VIEW))
+    ],
+    user: CurrentUser,
+    session: SessionDep,
+) -> dict[str, str]:
+    try:
+        await cast_service.lock_casting(session, project=project, actor=user)
+    except CastingLockError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await session.commit()
+    return {"status": "locked"}
 
 
 # ---------- instance ----------

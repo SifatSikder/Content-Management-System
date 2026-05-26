@@ -1,21 +1,21 @@
 """Cast-member domain service.
 
-When every cast member on a project is confirmed AND a location is confirmed,
-the project auto-advances CASTING → SHOOT_SCHEDULED. This mirrors spec §4
-row 7's "Location confirmed + cast confirmed" trigger.
+`confirm_cast_member` only flips the boolean — stage advance is now
+explicit via `lock_casting` (the "Lock Casting" button) instead of the
+old "all confirmed" heuristic.
 """
 
 from __future__ import annotations
 
 import uuid
 from collections.abc import Sequence
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cast_member import CastMemberModel
-from app.models.location import LocationModel
 from app.models.project import ProjectModel
 from app.models.user import UserModel
 from app.services import activity_service, project_service
@@ -155,26 +155,36 @@ async def confirm_cast_member(
         metadata={"cast_id": str(cast.id)},
     )
 
-    # Stage auto-advance casting → shoot_scheduled requires:
-    #   1. at least one location confirmed
-    #   2. at least one cast member, all confirmed
-    if confirmed and project.stage_key == "casting":
-        loc_q = await session.execute(
-            select(LocationModel)
-            .where(LocationModel.project_id == project.id)
-            .where(LocationModel.confirmed.is_(True))
-        )
-        if loc_q.first() is not None:
-            cast_q = await session.execute(
-                select(CastMemberModel).where(CastMemberModel.project_id == project.id)
-            )
-            all_cast = list(cast_q.scalars().all())
-            if all_cast and all(c.confirmed for c in all_cast):
-                await _advance_stage(
-                    session, project=project, target_key="shoot_scheduled", actor_id=actor.id
-                )
-
     return cast
+
+
+class CastingLockError(Exception):
+    """Raised when `lock_casting` is called from an invalid stage."""
+
+
+async def lock_casting(
+    session: AsyncSession, *, project: ProjectModel, actor: UserModel
+) -> ProjectModel:
+    """Explicit "Lock Casting" — stamps `projects.casting_locked_at/by` and
+    advances `casting → shoot_schedule`. Idempotent: re-stamps the columns
+    if pressed again after the stage already advanced."""
+    if project.stage_key not in ("casting", "shoot_schedule"):
+        raise CastingLockError(
+            f"Cannot lock casting from stage {project.stage_key}"
+        )
+    project.casting_locked_at = datetime.now(UTC)
+    project.casting_locked_by = actor.id
+    if project.stage_key == "casting":
+        await _advance_stage(
+            session, project=project, target_key="shoot_schedule", actor_id=actor.id
+        )
+    await activity_service.record(
+        session,
+        project_id=project.id,
+        actor_id=actor.id,
+        action="casting.locked",
+    )
+    return project
 
 
 async def delete_cast_member(
@@ -194,11 +204,13 @@ async def delete_cast_member(
 
 __all__ = [
     "CastMemberNotFoundError",
+    "CastingLockError",
     "attach_release_form",
     "confirm_cast_member",
     "create_cast_member",
     "delete_cast_member",
     "get_cast_member",
     "list_cast_members",
+    "lock_casting",
     "update_cast_member",
 ]

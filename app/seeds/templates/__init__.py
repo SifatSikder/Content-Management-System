@@ -9,7 +9,7 @@ Each module in this package defines a single template dict:
         "is_system": True,
         "default_terminology": {"project": {"en": "Project", "nl": "Project"}, ...},
         "default_stages": [
-            {"key": "idea", "name_i18n": {"nl": "...", "en": "..."},
+            {"key": "location_scouting", "name_i18n": {"nl": "...", "en": "..."},
              "order_index": 0, "is_terminal": False, "color": "#…",
              "allowed_from_stage_keys": []},
             ...

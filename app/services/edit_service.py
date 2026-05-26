@@ -97,7 +97,7 @@ async def add_edit_version(
     await session.flush()
 
     # First edit upload advances the project to "editing".
-    if project.stage_key not in ("editing", "final_review", "approved_published"):
+    if project.stage_key not in ("editing", "edit_review", "approved_published"):
         await _advance_stage(session, project=project, target_key="editing", actor_id=uploader.id)
 
     await activity_service.record(

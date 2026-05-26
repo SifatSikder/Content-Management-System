@@ -5,20 +5,11 @@ import { Calendar } from "lucide-react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { StageAssigneesPopover } from "@/features/projects/components/StageAssigneesPopover";
 import type { Project } from "@/features/projects/types";
 import { cn } from "@/lib/utils";
-
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
-}
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -69,18 +60,10 @@ export function ProjectCard({ project, draggable = true }: Props) {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2 pt-1">
-          <Avatar className="size-6">
-            {project.owner.avatar_url ? (
-              <AvatarImage src={project.owner.avatar_url} alt={project.owner.name} />
-            ) : null}
-            <AvatarFallback className="text-[10px]">{initials(project.owner.name)}</AvatarFallback>
-          </Avatar>
-          <span className="text-muted-foreground truncate text-[11px]">
-            {project.owner.name}
-          </span>
-        </div>
       </Link>
+      <div className="pt-2">
+        <StageAssigneesPopover project={project} compact />
+      </div>
     </Card>
   );
 }

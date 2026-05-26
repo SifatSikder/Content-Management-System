@@ -24,6 +24,7 @@ from app.routes import (
     business_memberships,
     businesses,
     dashboard,
+    department_handoffs,
     department_memberships,
     department_role_permissions,
     department_roles,
@@ -31,12 +32,15 @@ from app.routes import (
     drive,
     event_scheduling,
     health,
+    idea_versioning,
     location_scouting,
     me,
     notification_prefs,
     participant_roster,
+    project_assignments,
     projects,
     push,
+    raw_cuts,
     script_versioning,
 )
 
@@ -114,6 +118,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(projects.router)
+    app.include_router(project_assignments.router)
     app.include_router(push.router)
     app.include_router(drive.auth_router)
     app.include_router(drive.projects_router)
@@ -128,6 +133,7 @@ def create_app() -> FastAPI:
     app.include_router(departments.department_router)
     app.include_router(department_roles.router)
     app.include_router(department_role_permissions.router)
+    app.include_router(department_handoffs.router)
     app.include_router(department_memberships.router)
     app.include_router(me.router)
 
@@ -138,6 +144,7 @@ def create_app() -> FastAPI:
     # membership still protect data on the backend.
     app.include_router(script_versioning.projects_router)
     app.include_router(script_versioning.scripts_router)
+    app.include_router(idea_versioning.router)
     app.include_router(asset_review_with_timecodes.projects_router)
     app.include_router(asset_review_with_timecodes.edits_router)
     app.include_router(location_scouting.projects_router)
@@ -146,6 +153,7 @@ def create_app() -> FastAPI:
     app.include_router(participant_roster.cast_router)
     app.include_router(event_scheduling.projects_router)
     app.include_router(event_scheduling.shoots_router)
+    app.include_router(raw_cuts.projects_router)
 
     return app
 

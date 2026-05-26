@@ -63,11 +63,29 @@ class ProjectModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     owner: Mapped[UserModel] = relationship(UserModel, foreign_keys=[owner_id], lazy="selectin")
     due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
-    # Script-lock audit
+    # Script / location / casting lock audits. Locking is a property on the
+    # project (not a stage); the corresponding `Lock` button auto-advances
+    # the project to the next stage and stamps these columns.
     script_locked_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     script_locked_by: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    location_locked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    location_locked_by: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    casting_locked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    casting_locked_by: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,

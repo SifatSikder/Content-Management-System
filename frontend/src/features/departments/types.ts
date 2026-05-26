@@ -73,6 +73,24 @@ export interface PermissionListResponse {
   items: Permission[];
 }
 
+// ---------- stage handoffs -----------------------------------------------
+
+export interface StageHandoff {
+  id: string;
+  department_id: string;
+  stage_key: string;
+  role_ids: string[];
+}
+
+export interface StageHandoffListResponse {
+  items: StageHandoff[];
+}
+
+export interface UpsertStageHandoffBody {
+  stage_key: string;
+  role_ids: string[];
+}
+
 export interface UpsertPermissionBody {
   action_key: string;
   allowed: boolean;

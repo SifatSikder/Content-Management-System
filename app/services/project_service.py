@@ -28,8 +28,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.department import DepartmentModel
 from app.models.enums import Category, Role
 from app.models.project import ProjectModel
+from app.models.project_stage_assignment import ProjectStageAssignmentModel
 from app.models.user import UserModel
-from app.services import activity_service, stage_registry
+from app.services import activity_service, assignment_service, stage_registry
 
 log = structlog.get_logger(__name__)
 
@@ -151,6 +152,10 @@ async def create_project(
         action="project.created",
         metadata={"title": title, "category": category.value},
     )
+    # Seed the first stage's default assignees (Phase 2 = owner).
+    await assignment_service.seed_default(
+        session, project=project, stage_key=project.stage_key, actor=actor
+    )
     return project
 
 
@@ -181,9 +186,20 @@ async def list_projects(
     if not filters.include_deleted:
         where.append(ProjectModel.deleted_at.is_(None))
 
-    # Visibility: crew sees only assigned (proxied by ownership); others see all.
-    if user.role == Role.CREW:
-        where.append(ProjectModel.owner_id == user.id)
+    # Visibility: non-CEO users only see projects they own OR are an active
+    # assignee on (across any stage). CEO super-admins bypass the filter.
+    if not user.is_super_admin:
+        assigned_subq = (
+            select(ProjectStageAssignmentModel.project_id)
+            .where(ProjectStageAssignmentModel.user_id == user.id)
+            .where(ProjectStageAssignmentModel.removed_at.is_(None))
+        )
+        where.append(
+            or_(
+                ProjectModel.owner_id == user.id,
+                ProjectModel.id.in_(assigned_subq),
+            )
+        )
 
     if filters.mine:
         where.append(ProjectModel.owner_id == user.id)
@@ -292,6 +308,9 @@ async def move_stage(
         action="project.stage_changed",
         metadata={"from": previous_key, "to": target_stage_key},
     )
+    await assignment_service.seed_default(
+        session, project=project, stage_key=target_stage_key, actor=actor
+    )
     return project
 
 
@@ -325,6 +344,12 @@ async def auto_bump_stage(
         actor_id=actor_id,
         action="project.stage_changed",
         metadata={"from": previous_key, "to": target_key},
+    )
+    # Seed defaults for the new stage. We don't have a full UserModel here
+    # (only an actor_id), so pass actor=None — `assigned_by` will be NULL,
+    # which is the right semantic for "the system bumped you here".
+    await assignment_service.seed_default(
+        session, project=project, stage_key=target_key, actor=None
     )
 
 

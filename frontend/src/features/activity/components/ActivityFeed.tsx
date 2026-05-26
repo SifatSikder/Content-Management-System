@@ -17,8 +17,8 @@ interface Props {
   projectId: string;
   /**
    * Department id for the project. Used by `useStageLabel` to render
-   * stage-key metadata (e.g. `from: "idea", to: "script_drafting"` on
-   * `project.stage_changed` rows) as the localized stage names ("Idea"
+   * stage-key metadata (e.g. `from: "draft_idea", to: "script_drafting"` on
+   * `project.stage_changed` rows) as the localized stage names ("Draft idea"
    * → "Script drafting") instead of raw keys.
    */
   departmentId?: string;
@@ -102,7 +102,7 @@ export function ActivityFeed({ projectId, departmentId }: Props) {
           })();
           // For stage transitions, render "from {Stage A} to {Stage B}" via
           // useStageLabel. Both `from` and `to` in metadata are stage *keys*
-          // (e.g. "idea") — useStageLabel resolves them to localized names.
+          // (e.g. "draft_idea") — useStageLabel resolves them to localized names.
           const transition = (() => {
             if (item.action !== "project.stage_changed") return null;
             const meta = item.metadata_json as { from?: string; to?: string };

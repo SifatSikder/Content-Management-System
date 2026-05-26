@@ -60,3 +60,10 @@ export interface ReleaseUrlResponse {
 export function getReleaseUrl(castId: string): Promise<ReleaseUrlResponse> {
   return apiFetchAuthed<ReleaseUrlResponse>(`/cast/${castId}/release/url`);
 }
+
+export function lockProjectCasting(projectId: string): Promise<{ status: string }> {
+  return apiFetchAuthed<{ status: string }>(
+    `/projects/${projectId}/cast/lock`,
+    { method: "POST" },
+  );
+}

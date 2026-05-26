@@ -49,7 +49,7 @@ export function ScriptTab({ project, role, isOwner, onProjectUpdated }: Props) {
   const tToast = useTranslations("toast");
   const tErr = useTranslations("errors");
 
-  const locked = project.stage_key === "script_locked";
+  const locked = project.script_locked_at !== null;
   // Permission-service-backed gates. All three return `false` until the
   // permission map loads, hiding the affordances during that brief window
   // (strictly safer than flashing buttons the user might not have).

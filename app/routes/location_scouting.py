@@ -24,6 +24,7 @@ from app.auth.dependencies import (
     ProjectAccess,
     SessionDep,
     _user_can_access_project,
+    require_action,
     require_project_access,
 )
 from app.config import get_settings
@@ -41,6 +42,7 @@ from app.schemas.location import (
 )
 from app.services import location_service, storage_service
 from app.services.location_service import (
+    LocationLockError,
     LocationNotFoundError,
     LocationPhotoNotFoundError,
 )
@@ -105,6 +107,28 @@ async def get_locations(
 ) -> list[LocationPublic]:
     locations = await location_service.list_locations(session, project_id=project.id)
     return [LocationPublic.model_validate(loc) for loc in locations]
+
+
+# ---------- explicit lock action ----------
+
+@projects_router.post(
+    "/lock",
+    summary="Lock the location and advance the project (location.lock action)",
+    dependencies=[Depends(require_action("location.lock"))],
+)
+async def post_lock_location(
+    project: Annotated[
+        ProjectModel, Depends(require_project_access(ProjectAccess.VIEW))
+    ],
+    user: CurrentUser,
+    session: SessionDep,
+) -> dict[str, str]:
+    try:
+        await location_service.lock_location(session, project=project, actor=user)
+    except LocationLockError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await session.commit()
+    return {"status": "locked"}
 
 
 # ---------- instance ----------

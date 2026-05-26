@@ -124,29 +124,38 @@ class BusinessContextMiddleware(BaseHTTPMiddleware):
         request.state.is_super_admin = is_super_admin
 
         # Resolve business_id from path → header → (future) JWT.
+        # Track *where* the id came from so we can distinguish "user
+        # explicitly navigated to /businesses/<dead-uuid>" (404 is right)
+        # from "the client's cached header points to a now-deleted
+        # business" (silently drop the context and continue — otherwise
+        # a stale cookie permanently bricks the user).
         bid = _business_id_from_path(path)
+        bid_source: str | None = "path" if bid is not None else None
         if bid is None:
             bid = _parse_uuid(request.headers.get("X-Business-Id"))
+            if bid is not None:
+                bid_source = "header"
 
         if bid is not None:
-            # Soft-deleted businesses are off-limits to everyone, including
-            # the CEO. Without this guard a super-admin can still reach the
-            # deleted business's data by passing X-Business-Id manually,
-            # because RLS short-circuits on is_super_admin=true.
             if await self._business_is_deleted(bid):
                 log.info(
                     "business_context_deleted",
                     user_id=str(user.id),
                     business_id=str(bid),
+                    source=bid_source,
                 )
-                return JSONResponse(
-                    status_code=404,
-                    content={
-                        "detail": "Business not found",
-                        "request_id": getattr(request.state, "request_id", None),
-                    },
-                )
-            if not is_super_admin:
+                if bid_source == "path":
+                    return JSONResponse(
+                        status_code=404,
+                        content={
+                            "detail": "Business not found",
+                            "request_id": getattr(request.state, "request_id", None),
+                        },
+                    )
+                # Header pointed to a dead business — drop the context
+                # and let the route run with no business scope.
+                bid = None
+            if bid is not None and not is_super_admin:
                 # Non-CEO must be an active member of the targeted business.
                 allowed = await self._user_is_active_member(user.id, bid)
                 if not allowed:

@@ -22,72 +22,71 @@ from typing import Any
 
 STAGES: list[dict[str, Any]] = [
     {
-        "key": "idea",
-        "name_i18n": {"nl": "Idee", "en": "Idea"},
-        "color": "#94a3b8",
+        "key": "location_scouting",
+        "name_i18n": {"nl": "Locatie scouten", "en": "Location scouting"},
+        "color": "#fbbf24",
         "allowed_from_stage_keys": [],
+    },
+    {
+        "key": "draft_idea",
+        "name_i18n": {"nl": "Concept idee", "en": "Draft idea"},
+        "color": "#94a3b8",
+        # Auto-advance fires when `Lock Location` is pressed.
+        "allowed_from_stage_keys": ["location_scouting"],
     },
     {
         "key": "script_drafting",
         "name_i18n": {"nl": "Script schrijven", "en": "Script drafting"},
         "color": "#60a5fa",
-        "allowed_from_stage_keys": ["idea"],
+        # `Lock Idea` advances here. Bounce-back from review for revisions
+        # is also valid.
+        "allowed_from_stage_keys": ["draft_idea", "script_review"],
     },
     {
         "key": "script_review",
         "name_i18n": {"nl": "Script review", "en": "Script review"},
         "color": "#38bdf8",
-        # Submit from drafting, or back from a freshly unlocked locked script.
-        "allowed_from_stage_keys": ["script_drafting", "script_locked"],
-    },
-    {
-        "key": "script_locked",
-        "name_i18n": {"nl": "Script vergrendeld", "en": "Script locked"},
-        "color": "#0ea5e9",
-        "allowed_from_stage_keys": ["script_drafting", "script_review"],
-    },
-    {
-        "key": "location_scouting",
-        "name_i18n": {"nl": "Locatie scouten", "en": "Location scouting"},
-        "color": "#fbbf24",
-        # `location_service.create_location` auto-bumps from any pre-shoot
-        # stage; manual drag-from-any-script-stage stays valid too.
-        "allowed_from_stage_keys": [
-            "idea",
-            "script_drafting",
-            "script_review",
-            "script_locked",
-        ],
+        "allowed_from_stage_keys": ["script_drafting"],
     },
     {
         "key": "casting",
         "name_i18n": {"nl": "Casting", "en": "Casting"},
         "color": "#f59e0b",
-        "allowed_from_stage_keys": ["location_scouting"],
+        # `Lock Script` advances here from drafting *or* review.
+        # Locking is now a project property (`script_locked_at/by`), not a stage.
+        "allowed_from_stage_keys": ["script_drafting", "script_review"],
     },
     {
-        "key": "shoot_scheduled",
-        "name_i18n": {"nl": "Opname gepland", "en": "Shoot scheduled"},
+        "key": "shoot_schedule",
+        "name_i18n": {"nl": "Opname plannen", "en": "Shoot schedule"},
         "color": "#fb7185",
+        # `Lock Casting` advances here.
         "allowed_from_stage_keys": ["casting"],
+    },
+    {
+        "key": "shoot_in_progress",
+        "name_i18n": {"nl": "Opname bezig", "en": "Shoot in progress"},
+        "color": "#ef4444",
+        # `shoot_service` advances here when first shoot transitions to IN_PROGRESS.
+        "allowed_from_stage_keys": ["shoot_schedule"],
     },
     {
         "key": "shoot_done",
         "name_i18n": {"nl": "Opname klaar", "en": "Shoot done"},
         "color": "#f43f5e",
-        "allowed_from_stage_keys": ["shoot_scheduled"],
+        "allowed_from_stage_keys": ["shoot_in_progress"],
     },
     {
         "key": "editing",
         "name_i18n": {"nl": "Montage", "en": "Editing"},
         "color": "#a78bfa",
-        # `edit_service.add_edit_version` auto-bumps from any pre-editing
-        # stage; `edit_service.request_changes` bumps back from final_review.
-        "allowed_from_stage_keys": ["shoot_done", "final_review"],
+        # Raw-cut submission on shoot_done card advances here.
+        # `request_changes` from edit_review also bumps back here.
+        "allowed_from_stage_keys": ["shoot_done", "edit_review"],
     },
     {
-        "key": "final_review",
-        "name_i18n": {"nl": "Eind review", "en": "Final review"},
+        "key": "edit_review",
+        "name_i18n": {"nl": "Cut review", "en": "Edit review"},
         "color": "#8b5cf6",
         "allowed_from_stage_keys": ["editing"],
     },
@@ -96,7 +95,7 @@ STAGES: list[dict[str, Any]] = [
         "name_i18n": {"nl": "Goedgekeurd & gepubliceerd", "en": "Approved & published"},
         "color": "#22c55e",
         "is_terminal": True,
-        "allowed_from_stage_keys": ["final_review", "editing"],
+        "allowed_from_stage_keys": ["edit_review", "editing"],
     },
 ]
 
@@ -147,22 +146,19 @@ _ROLES: list[dict[str, Any]] = [
 # clean.
 
 STAGE_TRANSITIONS: list[tuple[str, str]] = [
-    ("idea", "script_drafting"),
+    ("location_scouting", "draft_idea"),
+    ("draft_idea", "script_drafting"),
     ("script_drafting", "script_review"),
-    ("script_drafting", "script_locked"),
-    ("script_review", "script_locked"),
-    ("script_locked", "script_review"),
-    ("idea", "location_scouting"),
-    ("script_drafting", "location_scouting"),
-    ("script_review", "location_scouting"),
-    ("script_locked", "location_scouting"),
-    ("location_scouting", "casting"),
-    ("casting", "shoot_scheduled"),
-    ("shoot_scheduled", "shoot_done"),
+    ("script_review", "script_drafting"),
+    ("script_drafting", "casting"),
+    ("script_review", "casting"),
+    ("casting", "shoot_schedule"),
+    ("shoot_schedule", "shoot_in_progress"),
+    ("shoot_in_progress", "shoot_done"),
     ("shoot_done", "editing"),
-    ("editing", "final_review"),
-    ("final_review", "editing"),
-    ("final_review", "approved_published"),
+    ("editing", "edit_review"),
+    ("edit_review", "editing"),
+    ("edit_review", "approved_published"),
     ("editing", "approved_published"),
 ]
 
@@ -184,7 +180,7 @@ def _build_permissions() -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
 
     publish_actions = {
-        _stage_move_key("final_review", "approved_published"),
+        _stage_move_key("edit_review", "approved_published"),
         _stage_move_key("editing", "approved_published"),
     }
 
@@ -197,6 +193,12 @@ def _build_permissions() -> list[dict[str, Any]]:
         "script_versioning.unlock",
         "asset_review_with_timecodes.approve",
         "asset_review_with_timecodes.request_changes",
+        "location.lock",
+        "casting.lock",
+        "raw_cut.submit",
+        "department.edit_handoffs",
+        "idea_versioning.lock",
+        "idea_versioning.signoff",
     ] + [_stage_move_key(f, t) for f, t in STAGE_TRANSITIONS]
     for action in ceo_actions:
         rows.append({"role_key": "ceo", "action_key": action, "allowed": True})
@@ -210,6 +212,12 @@ def _build_permissions() -> list[dict[str, Any]]:
         "script_versioning.unlock",
         "asset_review_with_timecodes.approve",
         "asset_review_with_timecodes.request_changes",
+        "location.lock",
+        "casting.lock",
+        "raw_cut.submit",
+        "department.edit_handoffs",
+        "idea_versioning.lock",
+        "idea_versioning.signoff",
     ] + [
         _stage_move_key(f, t)
         for f, t in STAGE_TRANSITIONS
@@ -220,12 +228,16 @@ def _build_permissions() -> list[dict[str, Any]]:
 
     # --- Junior Director: same set as AD, but ownership-gated at runtime -
     # Note: unlock is AD-or-CEO only (UnlockerRoles), so JD does NOT get it.
+    # JD can submit raw cuts (shoot phase is theirs) but not lock location
+    # or casting (those are the Asst CEO's calls).
     jd_actions = [
         "project.create",
         "project.edit",
         "project.delete",
         "script_versioning.lock",
         "asset_review_with_timecodes.request_changes",
+        "raw_cut.submit",
+        "idea_versioning.signoff",
     ] + [
         _stage_move_key(f, t)
         for f, t in STAGE_TRANSITIONS

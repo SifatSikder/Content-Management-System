@@ -31,6 +31,7 @@ import {
   listCast,
   unconfirmCast,
 } from "@/features/participant_roster/api";
+import { LockCastingButton } from "@/features/participant_roster/components/LockCastingButton";
 import type { CastMember } from "@/features/participant_roster/types";
 import { performResumableUpload } from "@/features/asset_review_with_timecodes/lib/resumable-upload";
 import type { Project } from "@/features/projects/types";
@@ -93,6 +94,9 @@ export function CastingTab({ project }: Props) {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-end">
+        <LockCastingButton project={project} />
+      </div>
       <Card className="p-4">
         <form className="space-y-3" onSubmit={onCreate}>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">

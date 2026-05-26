@@ -69,16 +69,16 @@ class PipelineStage(StrEnum):
     via `project.stage.key` against the `department_stages` table instead.
     """
 
-    IDEA = "idea"
+    LOCATION_SCOUTING = "location_scouting"
+    DRAFT_IDEA = "draft_idea"
     SCRIPT_DRAFTING = "script_drafting"
     SCRIPT_REVIEW = "script_review"
-    SCRIPT_LOCKED = "script_locked"
-    LOCATION_SCOUTING = "location_scouting"
     CASTING = "casting"
-    SHOOT_SCHEDULED = "shoot_scheduled"
+    SHOOT_SCHEDULE = "shoot_schedule"
+    SHOOT_IN_PROGRESS = "shoot_in_progress"
     SHOOT_DONE = "shoot_done"
     EDITING = "editing"
-    FINAL_REVIEW = "final_review"
+    EDIT_REVIEW = "edit_review"
     APPROVED_PUBLISHED = "approved_published"
 
 

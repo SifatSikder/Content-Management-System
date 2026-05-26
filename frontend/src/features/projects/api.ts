@@ -1,6 +1,8 @@
 import { apiFetchAuthed } from "@/lib/api-client";
 
 import type {
+  AssignmentListResponse,
+  AssignmentPublic,
   CreateProjectBody,
   MoveStageBody,
   Project,
@@ -9,7 +11,7 @@ import type {
 } from "./types";
 
 export interface ListProjectsParams {
-  /** Filter by stage *key* (e.g. `"idea"`). Per-department; resolves to the matching stage row. */
+  /** Filter by stage *key* (e.g. `"draft_idea"`). Per-department; resolves to the matching stage row. */
   stage?: string;
   owner_id?: string;
   filter?: "mine";
@@ -64,4 +66,48 @@ export function deleteProject(id: string): Promise<void> {
 
 export function restoreProject(id: string): Promise<Project> {
   return apiFetchAuthed<Project>(`/projects/${id}/restore`, { method: "POST" });
+}
+
+// ---------- per-stage assignments --------------------------------------
+
+export function listProjectAssignees(
+  projectId: string,
+): Promise<AssignmentListResponse> {
+  return apiFetchAuthed<AssignmentListResponse>(
+    `/projects/${projectId}/assignees`,
+  );
+}
+
+export function listStageAssignees(
+  projectId: string,
+  stageKey: string,
+): Promise<AssignmentListResponse> {
+  return apiFetchAuthed<AssignmentListResponse>(
+    `/projects/${projectId}/stages/${encodeURIComponent(stageKey)}/assignees`,
+  );
+}
+
+export function addStageAssignee(
+  projectId: string,
+  stageKey: string,
+  userId: string,
+): Promise<AssignmentPublic> {
+  return apiFetchAuthed<AssignmentPublic>(
+    `/projects/${projectId}/stages/${encodeURIComponent(stageKey)}/assignees`,
+    {
+      method: "POST",
+      body: { user_id: userId } as unknown as BodyInit,
+    },
+  );
+}
+
+export function removeStageAssignee(
+  projectId: string,
+  stageKey: string,
+  userId: string,
+): Promise<void> {
+  return apiFetchAuthed<void>(
+    `/projects/${projectId}/stages/${encodeURIComponent(stageKey)}/assignees/${userId}`,
+    { method: "DELETE" },
+  );
 }

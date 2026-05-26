@@ -65,7 +65,7 @@ async def add_version(
     author: UserModel,
     body_markdown: str,
 ) -> ScriptVersionModel:
-    if project.stage_key == "script_locked":
+    if project.script_locked_at is not None:
         raise IllegalStageTransitionError("Cannot add a version while the script is locked")
 
     script = await _get_or_create_script(session, project)
@@ -81,11 +81,10 @@ async def add_version(
 
     script.current_version_id = version.id
 
-    # First version moves the project past "idea" into "script_drafting" —
-    # both are template stage keys on Content Creation. For other templates
-    # without these specific keys, the auto-advance simply doesn't fire.
-    if project.stage_key == "idea":
-        await _advance_stage(session, project=project, target_key="script_drafting", actor_id=author.id)
+    # Stage advance out of draft_idea is owned by `idea_service.lock_idea`
+    # (the signoff-gated Lock Idea button). Creating a script version on
+    # draft_idea is allowed but doesn't move the card — the team must
+    # still lock the idea for the project to leave that stage.
 
     await activity_service.record(
         session,
@@ -275,9 +274,11 @@ async def lock_script(
         raise IllegalStageTransitionError(
             f"Cannot lock from stage {project.stage_key}"
         )
-    await _advance_stage(session, project=project, target_key="script_locked", actor_id=actor.id)
     project.script_locked_at = datetime.now(UTC)
     project.script_locked_by = actor.id
+    # Locking the script auto-advances the project to casting; the lock
+    # itself is a property on `projects`, not a stage of its own.
+    await _advance_stage(session, project=project, target_key="casting", actor_id=actor.id)
 
     await activity_service.record(
         session,
@@ -291,13 +292,17 @@ async def lock_script(
 async def unlock_script(
     session: AsyncSession, *, project: ProjectModel, actor: UserModel
 ) -> ProjectModel:
-    if project.stage_key != "script_locked":
-        raise IllegalStageTransitionError(
-            f"Cannot unlock from stage {project.stage_key}"
-        )
-    await _advance_stage(session, project=project, target_key="script_review", actor_id=actor.id)
+    if project.script_locked_at is None:
+        raise IllegalStageTransitionError("Script is not locked")
     project.script_locked_at = None
     project.script_locked_by = None
+    # Send the project back to review so the team can iterate. No-op if
+    # the project is already on script_review (e.g. CEO unlock from casting
+    # to allow edits without bouncing the stage).
+    if project.stage_key not in ("script_drafting", "script_review"):
+        await _advance_stage(
+            session, project=project, target_key="script_review", actor_id=actor.id
+        )
     await activity_service.record(
         session,
         project_id=project.id,

@@ -34,6 +34,10 @@ export interface Project {
   due_date: string | null;
   script_locked_at: string | null;
   script_locked_by: string | null;
+  location_locked_at: string | null;
+  location_locked_by: string | null;
+  casting_locked_at: string | null;
+  casting_locked_by: string | null;
   drive_folder_id: string | null;
   drive_folder_url: string | null;
   created_at: string;
@@ -66,5 +70,20 @@ export interface UpdateProjectBody {
 /** Body for POST /projects/{id}/stage. */
 export interface MoveStageBody {
   stage_key: string;
+}
+
+export interface AssignmentPublic {
+  id: string;
+  project_id: string;
+  stage_key: string;
+  user_id: string;
+  user: OwnerPublic;
+  slot_key: string | null;
+  assigned_at: string;
+  assigned_by: string | null;
+}
+
+export interface AssignmentListResponse {
+  items: AssignmentPublic[];
 }
 
