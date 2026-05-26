@@ -226,14 +226,10 @@ def _build_permissions() -> list[dict[str, Any]]:
     for action in ad_actions:
         rows.append({"role_key": "assistant_director", "action_key": action, "allowed": True})
 
-    # --- Junior Director: same set as AD, but ownership-gated at runtime -
-    # Note: unlock is AD-or-CEO only (UnlockerRoles), so JD does NOT get it.
-    # JD can submit raw cuts (shoot phase is theirs) but not lock location
-    # or casting (those are the Asst CEO's calls).
+    # --- Director: drives the shoot phase + signs off on idea + scripts --
+    # Project create/edit/delete is intentionally NOT here — only CEO and
+    # Assistant CEO own the project lifecycle.
     jd_actions = [
-        "project.create",
-        "project.edit",
-        "project.delete",
         "script_versioning.lock",
         "asset_review_with_timecodes.request_changes",
         "raw_cut.submit",
@@ -246,8 +242,15 @@ def _build_permissions() -> list[dict[str, Any]]:
     for action in jd_actions:
         rows.append({"role_key": "junior_director", "action_key": action, "allowed": True})
 
-    # --- Editor: edit owned projects only --------------------------------
-    for action in ("project.edit",):
+    # --- Editor: uploads cuts; no project lifecycle ----------------------
+    # Stage moves limited to editing → edit_review (submit for review) and
+    # the bounce-back from edit_review (when CEO requests changes via the
+    # asset-review handler). No project.create/edit/delete.
+    editor_actions = [
+        _stage_move_key("editing", "edit_review"),
+        _stage_move_key("edit_review", "editing"),
+    ]
+    for action in editor_actions:
         rows.append({"role_key": "editor", "action_key": action, "allowed": True})
 
     # --- Crew / Viewer: read-only --------------------------------------
