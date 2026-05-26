@@ -20,19 +20,6 @@ class OwnerPublic(BaseModel):
     avatar_url: str | None = None
 
 
-class StagePublic(BaseModel):
-    """Embedded stage view — what the kanban column needs to render."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    key: str
-    name_i18n: dict[str, str]
-    order_index: int
-    is_terminal: bool
-    color: str | None = None
-
-
 class DepartmentEmbed(BaseModel):
     """Minimal department projection inlined on a project response.
 
@@ -60,8 +47,8 @@ class CreateProjectBody(BaseModel):
     due_date: date | None = None
     # Optional override — only honoured for admins. Defaults to current_user.
     owner_id: uuid.UUID | None = None
-    # Optional: pick a stage other than the department's entry stage (rare).
-    stage_id: uuid.UUID | None = None
+    # Optional: pick a stage other than the department template's entry stage.
+    stage_key: str | None = Field(default=None, min_length=1, max_length=120)
 
 
 class UpdateProjectBody(BaseModel):
@@ -74,10 +61,9 @@ class UpdateProjectBody(BaseModel):
 
 
 class MoveStageBody(BaseModel):
-    """Either `stage_id` (preferred) or `stage_key` (legacy)."""
+    """Target stage key inside the project's department template."""
 
-    stage_id: uuid.UUID | None = None
-    stage_key: str | None = None
+    stage_key: str = Field(min_length=1, max_length=120)
 
 
 class ProjectPublic(BaseModel):
@@ -89,8 +75,7 @@ class ProjectPublic(BaseModel):
     category: Category
     business_id: uuid.UUID
     department_id: uuid.UUID
-    stage_id: uuid.UUID
-    stage: StagePublic
+    stage_key: str
     department: DepartmentEmbed
     owner_id: uuid.UUID
     owner: OwnerPublic
@@ -116,6 +101,5 @@ __all__ = [
     "OwnerPublic",
     "ProjectListResponse",
     "ProjectPublic",
-    "StagePublic",
     "UpdateProjectBody",
 ]

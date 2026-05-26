@@ -24,24 +24,14 @@ from app.models.department import DepartmentModel
 from app.models.department_membership import DepartmentMembershipModel
 from app.models.department_role import DepartmentRoleModel
 from app.models.department_role_permission import DepartmentRolePermissionModel
-from app.models.department_stage import DepartmentStageModel
 from app.models.department_template import DepartmentTemplateModel
 from app.models.enums import BusinessMembershipStatus
-from app.models.project import ProjectModel
 
 log = structlog.get_logger(__name__)
 
 
 class DepartmentNotFoundError(Exception):
     """Department does not exist."""
-
-
-class StageNotFoundError(Exception):
-    """Department stage does not exist."""
-
-
-class StageInUseError(Exception):
-    """A project still references this stage; refuse to delete."""
 
 
 class RoleNotFoundError(Exception):
@@ -138,7 +128,6 @@ async def create_department(
         candidate = f"{base_slug}-{counter}"
 
     terminology: dict[str, dict[str, str]] = {}
-    seed_stages: list[dict[str, Any]] = []
     seed_roles: list[dict[str, Any]] = []
     seed_role_permissions: list[dict[str, Any]] = []
     if template_key is not None:
@@ -146,7 +135,6 @@ async def create_department(
         # Copy terminology so later template edits don't retroactively
         # mutate live departments.
         terminology = dict(getattr(template, "default_terminology", None) or {})
-        seed_stages = list(template.default_stages or [])
         seed_roles = list(template.default_roles or [])
         # Permissions are NOT a column on `department_templates` (Phase B's
         # migration didn't add one — the data migration there inlined the
@@ -168,48 +156,9 @@ async def create_department(
     except IntegrityError as exc:
         raise SlugTakenError(candidate) from exc
 
-    # First pass: create stages without resolving cross-stage references.
-    stage_id_by_key: dict[str, uuid.UUID] = {}
-    stages_pending_resolution: list[tuple[DepartmentStageModel, list[str]]] = []
-    for idx, raw in enumerate(seed_stages):
-        key = raw.get("key") or f"stage-{idx}"
-        # Templates carry `allowed_from_stage_keys` (string keys); live rows
-        # store ids. Keep `allowed_from_stage_ids` accepted for backwards
-        # compatibility (Phase A path passes ids directly).
-        allowed_keys = raw.get("allowed_from_stage_keys")
-        if allowed_keys is None:
-            preset_ids = raw.get("allowed_from_stage_ids", [])
-            allowed_ids: list[str] = [str(sid) for sid in preset_ids]
-            allowed_keys_pending: list[str] = []
-        else:
-            allowed_ids = []
-            allowed_keys_pending = list(allowed_keys)
-
-        stage = DepartmentStageModel(
-            department_id=department.id,
-            business_id=business_id,
-            key=key,
-            name_i18n=raw.get("name_i18n") or {},
-            order_index=raw.get("order_index", idx),
-            is_terminal=bool(raw.get("is_terminal", False)),
-            color=raw.get("color"),
-            allowed_from_stage_ids=allowed_ids,
-        )
-        session.add(stage)
-        stages_pending_resolution.append((stage, allowed_keys_pending))
-    await session.flush()
-    for stage, _ in stages_pending_resolution:
-        stage_id_by_key[stage.key] = stage.id
-
-    # Second pass: resolve allowed_from_stage_keys → ids now that every
-    # sibling stage has an id.
-    for stage, pending_keys in stages_pending_resolution:
-        if not pending_keys:
-            continue
-        resolved = [
-            str(stage_id_by_key[k]) for k in pending_keys if k in stage_id_by_key
-        ]
-        stage.allowed_from_stage_ids = resolved
+    # Stages are no longer copied into the DB — `stage_registry` resolves
+    # them from `app/seeds/templates/<key>.py::STAGES` at runtime per
+    # `template_key`. See `app/services/stage_registry.py`.
 
     # Roles.
     role_id_by_key: dict[str, uuid.UUID] = {}
@@ -294,92 +243,6 @@ async def archive_department(
         department.archived_at = datetime.now(UTC)
         await session.flush()
     return department
-
-
-# --- Stages --------------------------------------------------------------
-
-
-async def list_stages(
-    session: AsyncSession, *, department_id: uuid.UUID
-) -> Sequence[DepartmentStageModel]:
-    result = await session.execute(
-        select(DepartmentStageModel)
-        .where(DepartmentStageModel.department_id == department_id)
-        .order_by(DepartmentStageModel.order_index.asc())
-    )
-    return result.scalars().all()
-
-
-async def create_stage(
-    session: AsyncSession,
-    *,
-    department: DepartmentModel,
-    key: str,
-    name_i18n: dict[str, str],
-    order_index: int = 0,
-    is_terminal: bool = False,
-    color: str | None = None,
-    allowed_from_stage_ids: list[uuid.UUID] | None = None,
-) -> DepartmentStageModel:
-    stage = DepartmentStageModel(
-        department_id=department.id,
-        business_id=department.business_id,
-        key=key,
-        name_i18n=name_i18n,
-        order_index=order_index,
-        is_terminal=is_terminal,
-        color=color,
-        allowed_from_stage_ids=[str(sid) for sid in (allowed_from_stage_ids or [])],
-    )
-    session.add(stage)
-    await session.flush()
-    return stage
-
-
-async def get_stage(
-    session: AsyncSession, *, stage_id: uuid.UUID
-) -> DepartmentStageModel:
-    stage = await session.get(DepartmentStageModel, stage_id)
-    if stage is None:
-        raise StageNotFoundError(str(stage_id))
-    return stage
-
-
-async def update_stage(
-    session: AsyncSession,
-    *,
-    stage: DepartmentStageModel,
-    name_i18n: dict[str, str] | None = None,
-    order_index: int | None = None,
-    is_terminal: bool | None = None,
-    color: str | None = None,
-    allowed_from_stage_ids: list[uuid.UUID] | None = None,
-) -> DepartmentStageModel:
-    if name_i18n is not None:
-        stage.name_i18n = dict(name_i18n)
-    if order_index is not None:
-        stage.order_index = order_index
-    if is_terminal is not None:
-        stage.is_terminal = is_terminal
-    if color is not None:
-        stage.color = color
-    if allowed_from_stage_ids is not None:
-        stage.allowed_from_stage_ids = [str(sid) for sid in allowed_from_stage_ids]
-    await session.flush()
-    return stage
-
-
-async def delete_stage(
-    session: AsyncSession, *, stage: DepartmentStageModel
-) -> None:
-    # Refuse to delete if any project still references this stage_id.
-    in_use = await session.execute(
-        select(ProjectModel.id).where(ProjectModel.stage_id == stage.id).limit(1)
-    )
-    if in_use.first() is not None:
-        raise StageInUseError(str(stage.id))
-    await session.delete(stage)
-    await session.flush()
 
 
 # --- Roles ---------------------------------------------------------------
@@ -648,28 +511,21 @@ __all__ = [
     "DepartmentNotFoundError",
     "RoleNotFoundError",
     "SlugTakenError",
-    "StageInUseError",
-    "StageNotFoundError",
     "TemplateNotFoundError",
     "archive_department",
     "assign_department_member",
     "create_department",
     "create_role",
-    "create_stage",
     "delete_role",
-    "delete_stage",
     "get_department",
     "get_role",
-    "get_stage",
     "list_department_memberships",
     "list_departments",
     "list_permissions",
     "list_roles",
-    "list_stages",
     "remove_department_member",
     "slugify",
     "update_department",
     "update_role",
-    "update_stage",
     "upsert_permission",
 ]

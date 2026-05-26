@@ -49,7 +49,7 @@ export function ScriptTab({ project, role, isOwner, onProjectUpdated }: Props) {
   const tToast = useTranslations("toast");
   const tErr = useTranslations("errors");
 
-  const locked = project.stage.key === "script_locked";
+  const locked = project.stage_key === "script_locked";
   // Permission-service-backed gates. All three return `false` until the
   // permission map loads, hiding the affordances during that brief window
   // (strictly safer than flashing buttons the user might not have).
@@ -229,7 +229,7 @@ export function ScriptTab({ project, role, isOwner, onProjectUpdated }: Props) {
                 {t("save_new_version")}
               </Button>
             )}
-            {canEdit && project.stage.key === "script_drafting" && (
+            {canEdit && project.stage_key === "script_drafting" && (
               <Button size="sm" variant="secondary" onClick={submit}>
                 <Send className="mr-2 size-4" />
                 {t("submit_for_review")}

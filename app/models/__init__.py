@@ -15,7 +15,6 @@ from app.models.department import DepartmentModel
 from app.models.department_membership import DepartmentMembershipModel
 from app.models.department_role import DepartmentRoleModel
 from app.models.department_role_permission import DepartmentRolePermissionModel
-from app.models.department_stage import DepartmentStageModel
 from app.models.department_template import DepartmentTemplateModel
 from app.models.edit import EditCommentModel, EditVersionModel
 from app.models.enums import (
@@ -50,7 +49,6 @@ __all__ = [
     "DepartmentModel",
     "DepartmentRoleModel",
     "DepartmentRolePermissionModel",
-    "DepartmentStageModel",
     "DepartmentTemplateModel",
     "EditCommentModel",
     "EditStatus",

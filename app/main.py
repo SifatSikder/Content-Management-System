@@ -27,7 +27,6 @@ from app.routes import (
     department_memberships,
     department_role_permissions,
     department_roles,
-    department_stages,
     departments,
     drive,
     event_scheduling,
@@ -127,7 +126,6 @@ def create_app() -> FastAPI:
     app.include_router(business_memberships.router)
     app.include_router(departments.business_router)
     app.include_router(departments.department_router)
-    app.include_router(department_stages.router)
     app.include_router(department_roles.router)
     app.include_router(department_role_permissions.router)
     app.include_router(department_memberships.router)

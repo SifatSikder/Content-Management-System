@@ -58,6 +58,7 @@ export default function ProjectsPage() {
         setStage={setStageKey}
         onCreated={projectsState.prepend}
         departmentId={department.current.id}
+        templateKey={department.current.template_key}
         terminology={department.current.terminology}
       />
 
@@ -81,7 +82,7 @@ export default function ProjectsPage() {
       ) : (
         <KanbanBoard
           user={auth.user}
-          departmentId={department.current.id}
+          templateKey={department.current.template_key}
           projectsState={projectsState}
         />
       )}

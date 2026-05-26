@@ -10,10 +10,10 @@ Five summaries:
     throughput(weeks)  — projects published per ISO week
     time_in_stage()    — average + max days spent per stage
 
-Phase B made stages per-department. The dashboard now scopes counts +
-histograms to a single `department_id` (the caller passes the current
-department). "Published" is identified by the department's terminal
-stage(s) rather than the legacy `PipelineStage.APPROVED_PUBLISHED`.
+Stages are looked up in code via `app.services.stage_registry` (the
+`department_stages` table was dropped 2026-05-26). Each project carries a
+`stage_key` string and the department carries the `template_key` we use to
+resolve stage metadata.
 """
 
 from __future__ import annotations
@@ -22,17 +22,19 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import structlog
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.activity import ActivityModel
-from app.models.department_stage import DepartmentStageModel
+from app.models.department import DepartmentModel
 from app.models.edit import EditVersionModel
 from app.models.enums import EditStatus
 from app.models.project import ProjectModel
 from app.models.user import UserModel
+from app.services import stage_registry
 
 log = structlog.get_logger(__name__)
 
@@ -87,29 +89,18 @@ class TimeInStage:
 # ---------- helpers ----------
 
 
-async def _ordered_stages(
+async def _template_stages_for(
     session: AsyncSession, *, department_id: uuid.UUID
-) -> list[DepartmentStageModel]:
-    """Stages for the department, in display order."""
-    result = await session.execute(
-        select(DepartmentStageModel)
-        .where(DepartmentStageModel.department_id == department_id)
-        .order_by(DepartmentStageModel.order_index.asc(), DepartmentStageModel.created_at.asc())
-    )
-    return list(result.scalars().all())
+) -> list[dict[str, Any]]:
+    """Resolve the department's template stages from the in-code registry."""
+    department = await session.get(DepartmentModel, department_id)
+    if department is None:
+        return []
+    return stage_registry.get_stages(department.template_key)
 
 
-async def _terminal_stage_keys(
-    session: AsyncSession, *, department_id: uuid.UUID
-) -> set[str]:
-    """Stage keys that mark a project as "published" / "done" in this department."""
-    result = await session.execute(
-        select(DepartmentStageModel.key).where(
-            DepartmentStageModel.department_id == department_id,
-            DepartmentStageModel.is_terminal.is_(True),
-        )
-    )
-    return {row[0] for row in result.all()}
+def _terminal_keys_from(stages: list[dict[str, Any]]) -> set[str]:
+    return {s["key"] for s in stages if s.get("is_terminal")}
 
 
 # ---------- 1. awaiting ----------
@@ -120,9 +111,8 @@ async def awaiting(
 ) -> list[AwaitingItem]:
     """Cuts whose status is still IN_REVIEW — the CEO's approval queue."""
     q = (
-        select(EditVersionModel, ProjectModel, DepartmentStageModel.key)
+        select(EditVersionModel, ProjectModel)
         .join(ProjectModel, ProjectModel.id == EditVersionModel.project_id)
-        .join(DepartmentStageModel, DepartmentStageModel.id == ProjectModel.stage_id)
         .where(
             EditVersionModel.status == EditStatus.IN_REVIEW,
             ProjectModel.deleted_at.is_(None),
@@ -135,13 +125,13 @@ async def awaiting(
         AwaitingItem(
             project_id=p.id,
             project_title=p.title,
-            stage=stage_key,
+            stage=p.stage_key,
             cut_id=cut.id,
             cut_version=cut.version_number,
             uploaded_at=cut.created_at,
             uploader_id=cut.uploader_id,
         )
-        for cut, p, stage_key in rows
+        for cut, p in rows
     ]
 
 
@@ -152,21 +142,23 @@ async def stage_counts(
     session: AsyncSession, *, department_id: uuid.UUID
 ) -> list[StageCount]:
     """Count of live projects per stage. Stages with zero rows still appear."""
+    stages = await _template_stages_for(session, department_id=department_id)
+    if not stages:
+        return []
+
     q = (
-        select(DepartmentStageModel.key, func.count(ProjectModel.id))
-        .select_from(DepartmentStageModel)
-        .join(
-            ProjectModel,
-            (ProjectModel.stage_id == DepartmentStageModel.id)
-            & (ProjectModel.deleted_at.is_(None)),
-            isouter=True,
+        select(ProjectModel.stage_key, func.count(ProjectModel.id))
+        .where(
+            ProjectModel.department_id == department_id,
+            ProjectModel.deleted_at.is_(None),
         )
-        .where(DepartmentStageModel.department_id == department_id)
-        .group_by(DepartmentStageModel.key, DepartmentStageModel.order_index)
-        .order_by(DepartmentStageModel.order_index.asc())
+        .group_by(ProjectModel.stage_key)
     )
     raw = (await session.execute(q)).all()
-    return [StageCount(stage=key, count=int(count)) for key, count in raw]
+    counts_by_key = {key: int(count) for key, count in raw}
+    # Iterate registry order so the chart axis is deterministic and stages
+    # without rows still appear.
+    return [StageCount(stage=s["key"], count=counts_by_key.get(s["key"], 0)) for s in stages]
 
 
 # ---------- 3. stuck ----------
@@ -177,7 +169,8 @@ async def stuck(
 ) -> list[StuckProject]:
     """Projects whose most-recent activity is older than `days` ago."""
     threshold = datetime.now(UTC) - timedelta(days=days)
-    terminal_keys = await _terminal_stage_keys(session, department_id=department_id)
+    stages = await _template_stages_for(session, department_id=department_id)
+    terminal_keys = _terminal_keys_from(stages)
 
     last_activity_subq = (
         select(
@@ -193,11 +186,9 @@ async def stuck(
         select(
             ProjectModel,
             UserModel.name.label("owner_name"),
-            DepartmentStageModel.key.label("stage_key"),
             last_activity_subq.c.last_at,
         )
         .join(UserModel, UserModel.id == ProjectModel.owner_id)
-        .join(DepartmentStageModel, DepartmentStageModel.id == ProjectModel.stage_id)
         .join(
             last_activity_subq,
             last_activity_subq.c.project_id == ProjectModel.id,
@@ -212,8 +203,8 @@ async def stuck(
     now = datetime.now(UTC)
 
     out: list[StuckProject] = []
-    for project, owner_name, stage_key, last_at in rows:
-        if stage_key in terminal_keys:
+    for project, owner_name, last_at in rows:
+        if project.stage_key in terminal_keys:
             continue
         compare = last_at or project.created_at
         if compare > threshold:
@@ -223,7 +214,7 @@ async def stuck(
             StuckProject(
                 project_id=project.id,
                 project_title=project.title,
-                stage=stage_key,
+                stage=project.stage_key,
                 owner_id=project.owner_id,
                 owner_name=owner_name,
                 last_activity_at=last_at,
@@ -255,7 +246,8 @@ async def throughput(
     and re-publishes counts once per publish event.
     """
     since = datetime.now(UTC) - timedelta(weeks=weeks)
-    terminal_keys = await _terminal_stage_keys(session, department_id=department_id)
+    stages = await _template_stages_for(session, department_id=department_id)
+    terminal_keys = _terminal_keys_from(stages)
 
     q = (
         select(ActivityModel.created_at, ActivityModel.metadata_json)
@@ -293,8 +285,8 @@ async def time_in_stage(
     session: AsyncSession, *, department_id: uuid.UUID
 ) -> list[TimeInStage]:
     """Average and max duration projects spent in each stage."""
-    stages = await _ordered_stages(session, department_id=department_id)
-    stage_keys = [s.key for s in stages]
+    stages = await _template_stages_for(session, department_id=department_id)
+    stage_keys = [s["key"] for s in stages]
     known = set(stage_keys)
 
     q = (

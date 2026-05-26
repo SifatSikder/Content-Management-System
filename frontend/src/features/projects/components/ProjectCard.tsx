@@ -35,7 +35,7 @@ export function ProjectCard({ project, draggable = true }: Props) {
 
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: project.id,
-    data: { stage: project.stage },
+    data: { stageKey: project.stage_key },
     disabled: !draggable,
   });
 

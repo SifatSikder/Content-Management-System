@@ -1,14 +1,14 @@
 """Content Creation — the department template carrying the original Sons Real
-Estate real-estate video pipeline (11 stages, 6 roles, 5 capabilities).
+Estate real-estate video pipeline (11 stages, 6 roles).
 
-Stages, roles, and the role→action permission matrix here are the exact mirror
-of what `app/models/enums.py::PipelineStage`/`Role` and
-`app/auth/dependencies.py::can_user_move_to_stage`/`_user_can_access_project`
-encoded before Phase B. After Phase B lands these stop being the hardcoded
-source of truth: they're imported once at migration time, written into
-`department_templates`, then copied into `department_stages` +
-`department_roles` + `department_role_permissions` when a department is
-instantiated from the template.
+`STAGES` and `STAGE_TRANSITIONS` are the **runtime** source of truth for the
+kanban + stage-transition permissions in any Content Creation department. The
+DB-backed `department_stages` table was removed (2026-05-26 follow-up to the
+capability registry teardown); per-department customisation moved back into
+code per template, mirroring the pre-Phase B `PipelineStage` enum world.
+Roles, role descriptions, and the permission matrix are still seeded into
+`department_roles` + `department_role_permissions` at instantiation so each
+business can tune who can do what without a code edit.
 """
 
 from __future__ import annotations
@@ -16,11 +16,11 @@ from __future__ import annotations
 from typing import Any
 
 # ---------- stages -------------------------------------------------------
-# Order in this list is the order_index assigned when the template is
-# instantiated. `allowed_from_stage_keys` is resolved to actual stage ids in
-# `app.services.department_service.create_department`.
+# Order is significant — index = kanban column order. Every stage entry on
+# every department of this template references this list at runtime via
+# `app.services.stage_registry`.
 
-_STAGES: list[dict[str, Any]] = [
+STAGES: list[dict[str, Any]] = [
     {
         "key": "idea",
         "name_i18n": {"nl": "Idee", "en": "Idea"},
@@ -146,7 +146,7 @@ _ROLES: list[dict[str, Any]] = [
 # expects callers to look up; explicit enumeration keeps the audit trail
 # clean.
 
-_STAGE_TRANSITIONS: list[tuple[str, str]] = [
+STAGE_TRANSITIONS: list[tuple[str, str]] = [
     ("idea", "script_drafting"),
     ("script_drafting", "script_review"),
     ("script_drafting", "script_locked"),
@@ -197,7 +197,7 @@ def _build_permissions() -> list[dict[str, Any]]:
         "script_versioning.unlock",
         "asset_review_with_timecodes.approve",
         "asset_review_with_timecodes.request_changes",
-    ] + [_stage_move_key(f, t) for f, t in _STAGE_TRANSITIONS]
+    ] + [_stage_move_key(f, t) for f, t in STAGE_TRANSITIONS]
     for action in ceo_actions:
         rows.append({"role_key": "ceo", "action_key": action, "allowed": True})
 
@@ -212,7 +212,7 @@ def _build_permissions() -> list[dict[str, Any]]:
         "asset_review_with_timecodes.request_changes",
     ] + [
         _stage_move_key(f, t)
-        for f, t in _STAGE_TRANSITIONS
+        for f, t in STAGE_TRANSITIONS
         if _stage_move_key(f, t) not in publish_actions
     ]
     for action in ad_actions:
@@ -228,7 +228,7 @@ def _build_permissions() -> list[dict[str, Any]]:
         "asset_review_with_timecodes.request_changes",
     ] + [
         _stage_move_key(f, t)
-        for f, t in _STAGE_TRANSITIONS
+        for f, t in STAGE_TRANSITIONS
         if _stage_move_key(f, t) not in publish_actions
     ]
     for action in jd_actions:
@@ -263,10 +263,10 @@ TEMPLATE: dict[str, Any] = {
     ),
     "is_system": True,
     "default_terminology": _TERMINOLOGY,
-    "default_stages": _STAGES,
+    "default_stages": STAGES,
     "default_roles": _ROLES,
     "default_role_permissions": _build_permissions(),
 }
 
 
-__all__ = ["TEMPLATE"]
+__all__ = ["STAGES", "STAGE_TRANSITIONS", "TEMPLATE"]

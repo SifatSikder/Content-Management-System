@@ -48,9 +48,8 @@ export function updateProject(id: string, body: UpdateProjectBody): Promise<Proj
 }
 
 /**
- * Move the project to another stage. Accepts either a `stage_id` (preferred)
- * or the stage `key` (legacy fallback). The backend resolves the key inside
- * the project's department.
+ * Move the project to another stage. The backend validates `stage_key`
+ * against the in-code stage registry for the project's department template.
  */
 export function moveStage(id: string, target: MoveStageBody): Promise<Project> {
   return apiFetchAuthed<Project>(`/projects/${id}/stage`, {

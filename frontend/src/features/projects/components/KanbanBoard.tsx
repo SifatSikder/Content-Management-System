@@ -13,7 +13,7 @@ import { useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { useDepartmentStages } from "@/features/departments/hooks/useDepartmentStages";
+import { useTemplateStages } from "@/features/departments/hooks/useTemplateStages";
 import { ProjectCard } from "@/features/projects/components/ProjectCard";
 import { KanbanColumn } from "@/features/projects/components/KanbanColumn";
 import { moveStage } from "@/features/projects/api";
@@ -24,17 +24,16 @@ import type { UseProjectsResult } from "../hooks/useProjects";
 
 interface Props {
   user: AuthUser;
-  /** The department whose stages drive the kanban columns. */
-  departmentId: string;
+  /** Department template_key — drives which stage list renders as columns. */
+  templateKey: string | null | undefined;
   projectsState: UseProjectsResult;
 }
 
 /**
- * Department-aware kanban.
+ * Template-aware kanban.
  *
- * Columns come from `/departments/{id}/stages` (rather than the legacy
- * hard-coded `PIPELINE_STAGES` enum) so a CEO who renames "Idea" to "Brief"
- * sees the change after a refresh without redeploying code.
+ * Columns come from the in-code stage registry keyed by the department's
+ * `template_key` (see `frontend/src/features/projects/lib/stagesByTemplate`).
  *
  * Drop permission is intentionally optimistic: we render every column as a
  * valid drop target and let the backend reject moves the user isn't
@@ -43,18 +42,18 @@ interface Props {
  * could be folded in later via `useCanIDo("stage.move:<from>-><to>")`
  * once that's cheap to fetch per-pair.
  */
-export function KanbanBoard({ user: _user, departmentId, projectsState }: Props) {
+export function KanbanBoard({ user: _user, templateKey, projectsState }: Props) {
   const tToast = useTranslations("toast");
   const tProj = useTranslations("projects");
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
   const [activeId, setActiveId] = useState<string | null>(null);
-  const { stages } = useDepartmentStages(departmentId);
+  const stages = useTemplateStages(templateKey);
 
   const byStage = useMemo(() => {
     const map = new Map<string, Project[]>();
-    for (const s of stages) map.set(s.id, []);
+    for (const s of stages) map.set(s.key, []);
     for (const p of projectsState.projects) {
-      const bucket = map.get(p.stage_id);
+      const bucket = map.get(p.stage_key);
       if (bucket) bucket.push(p);
     }
     return map;
@@ -74,25 +73,15 @@ export function KanbanBoard({ user: _user, departmentId, projectsState }: Props)
     if (!over) return;
     const project = projectsState.projects.find((p) => p.id === active.id);
     if (!project) return;
-    const targetStageId = String(over.id);
-    if (targetStageId === project.stage_id) return;
-    const targetStage = stages.find((s) => s.id === targetStageId);
+    const targetStageKey = String(over.id);
+    if (targetStageKey === project.stage_key) return;
+    const targetStage = stages.find((s) => s.key === targetStageKey);
     if (!targetStage) return;
     try {
       await projectsState.optimisticUpdate(
         project.id,
-        {
-          stage_id: targetStage.id,
-          stage: {
-            id: targetStage.id,
-            key: targetStage.key,
-            name_i18n: targetStage.name_i18n,
-            order_index: targetStage.order_index,
-            is_terminal: targetStage.is_terminal,
-            color: targetStage.color,
-          },
-        },
-        () => moveStage(project.id, { stage_id: targetStage.id }),
+        { stage_key: targetStage.key },
+        () => moveStage(project.id, { stage_key: targetStage.key }),
       );
       toast.success(tToast("stage_changed"));
     } catch {
@@ -108,9 +97,9 @@ export function KanbanBoard({ user: _user, departmentId, projectsState }: Props)
       >
         {stages.map((stage) => (
           <KanbanColumn
-            key={stage.id}
+            key={stage.key}
             stage={stage}
-            projects={byStage.get(stage.id) ?? []}
+            projects={byStage.get(stage.key) ?? []}
             canDrop
           />
         ))}

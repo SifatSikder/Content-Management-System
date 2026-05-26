@@ -82,50 +82,6 @@ class MeDepartmentsResponse(BaseModel):
     items: list[MeDepartmentEntry]
 
 
-# --- Stages --------------------------------------------------------------
-
-
-class CreateStageBody(BaseModel):
-    key: str = Field(
-        min_length=1,
-        max_length=64,
-        pattern=r"^[a-z0-9](?:[a-z0-9_]*[a-z0-9])?$",
-    )
-    name_i18n: dict[str, str] = Field(default_factory=dict)
-    order_index: int = 0
-    is_terminal: bool = False
-    color: str | None = Field(default=None, max_length=32)
-    allowed_from_stage_ids: list[uuid.UUID] = Field(default_factory=list)
-
-
-class UpdateStageBody(BaseModel):
-    name_i18n: dict[str, str] | None = None
-    order_index: int | None = None
-    is_terminal: bool | None = None
-    color: str | None = Field(default=None, max_length=32)
-    allowed_from_stage_ids: list[uuid.UUID] | None = None
-
-
-class StagePublic(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    department_id: uuid.UUID
-    business_id: uuid.UUID
-    key: str
-    name_i18n: dict[str, str]
-    order_index: int
-    is_terminal: bool
-    color: str | None = None
-    allowed_from_stage_ids: list[str]
-    created_at: datetime
-    updated_at: datetime
-
-
-class StageListResponse(BaseModel):
-    items: list[StagePublic]
-
-
 # --- Roles ---------------------------------------------------------------
 
 
@@ -259,7 +215,6 @@ __all__ = [
     "AssignDepartmentMemberBody",
     "CreateDepartmentBody",
     "CreateRoleBody",
-    "CreateStageBody",
     "DepartmentListResponse",
     "DepartmentMembershipListResponse",
     "DepartmentMembershipPublic",
@@ -271,10 +226,7 @@ __all__ = [
     "PermissionPublic",
     "RoleListResponse",
     "RolePublic",
-    "StageListResponse",
-    "StagePublic",
     "UpdateDepartmentBody",
     "UpdateRoleBody",
-    "UpdateStageBody",
     "UpsertPermissionBody",
 ]

@@ -29,20 +29,8 @@ async def _advance_stage(
     target_key: str,
     actor_id: uuid.UUID,
 ) -> None:
-    target_id = await project_service.resolve_stage_id_by_key(
-        session, department_id=project.department_id, key=target_key
-    )
-    if target_id is None or target_id == project.stage_id:
-        return
-    previous_key = project.stage.key
-    project.stage_id = target_id
-    await session.refresh(project, attribute_names=["stage"])
-    await activity_service.record(
-        session,
-        project_id=project.id,
-        actor_id=actor_id,
-        action="project.stage_changed",
-        metadata={"from": previous_key, "to": target_key},
+    await project_service.auto_bump_stage(
+        session, project=project, target_key=target_key, actor_id=actor_id
     )
 
 
@@ -185,7 +173,7 @@ async def transition_shoot(
     )
 
     # Spec §4 row 9: wrap shoot → shoot_done.
-    if target == ShootStatus.WRAPPED and project.stage.key == "shoot_scheduled":
+    if target == ShootStatus.WRAPPED and project.stage_key == "shoot_scheduled":
         await _advance_stage(
             session, project=project, target_key="shoot_done", actor_id=actor.id
         )

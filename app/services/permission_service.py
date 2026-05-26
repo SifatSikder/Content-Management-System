@@ -35,9 +35,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.department import DepartmentModel
 from app.models.department_membership import DepartmentMembershipModel
 from app.models.department_role_permission import DepartmentRolePermissionModel
-from app.models.department_stage import DepartmentStageModel
 from app.models.project import ProjectModel
 from app.models.user import UserModel
+from app.services import stage_registry
 
 log = structlog.get_logger(__name__)
 
@@ -184,33 +184,27 @@ async def can_user_move_to_stage(
     *,
     user: UserModel,
     project: ProjectModel,
-    target_stage_id: uuid.UUID,
+    target_stage_key: str,
     request: Request | None = None,
 ) -> bool:
-    """True if the user may move `project` to `target_stage_id`.
+    """True if the user may move `project` to `target_stage_key`.
 
-    Looks up the source + target stage keys, then checks the action
+    Looks up the source + target stage keys in the in-code registry for the
+    project's department template, then checks the action
     `stage.move:<from>-><to>` on the user's department role.
     """
     if user.is_super_admin:
         return True
 
-    target_q = await session.execute(
-        select(DepartmentStageModel).where(DepartmentStageModel.id == target_stage_id)
-    )
-    target = target_q.scalar_one_or_none()
-    if target is None or target.department_id != project.department_id:
+    department = await session.get(DepartmentModel, project.department_id)
+    if department is None:
         return False
-    if project.stage_id is None:
+    if not stage_registry.is_known_stage(department.template_key, target_stage_key):
         return False
-    source_q = await session.execute(
-        select(DepartmentStageModel).where(DepartmentStageModel.id == project.stage_id)
-    )
-    source = source_q.scalar_one_or_none()
-    if source is None:
+    if not stage_registry.is_known_stage(department.template_key, project.stage_key):
         return False
 
-    action = f"stage.move:{source.key}->{target.key}"
+    action = f"stage.move:{project.stage_key}->{target_stage_key}"
     base_allowed = await can_user_perform_action(
         session,
         user=user,

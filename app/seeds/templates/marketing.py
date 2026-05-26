@@ -20,10 +20,9 @@ from typing import Any
 
 # ---------- stages -------------------------------------------------------
 # Six stages: a basic outbound-sales funnel. `closed_won` and `closed_lost`
-# are both terminal — the kanban renders them in a row at the right edge
-# (Phase B's KanbanColumn just reads `is_terminal` for color hints).
+# are both terminal. Runtime source of truth — see `stage_registry`.
 
-_STAGES: list[dict[str, Any]] = [
+STAGES: list[dict[str, Any]] = [
     {
         "key": "lead_new",
         "name_i18n": {"nl": "Nieuwe lead", "en": "New lead"},
@@ -93,7 +92,7 @@ _ROLES: list[dict[str, Any]] = [
 # ---------- permission matrix -------------------------------------------
 # Enumerate every valid (from, to) pair as a `stage.move:from->to` action.
 
-_STAGE_TRANSITIONS: list[tuple[str, str]] = [
+STAGE_TRANSITIONS: list[tuple[str, str]] = [
     ("lead_new", "qualified"),
     ("qualified", "contacted"),
     ("contacted", "meeting_scheduled"),
@@ -138,7 +137,7 @@ def _build_permissions() -> list[dict[str, Any]]:
         "participant_roster.add",
         "participant_roster.edit",
         "participant_roster.remove",
-    ] + [_stage_move_key(f, t) for f, t in _STAGE_TRANSITIONS]
+    ] + [_stage_move_key(f, t) for f, t in STAGE_TRANSITIONS]
     for action in manager_actions:
         rows.append({"role_key": "marketing_manager", "action_key": action, "allowed": True})
 
@@ -158,7 +157,7 @@ def _build_permissions() -> list[dict[str, Any]]:
         "participant_roster.edit",
     ] + [
         _stage_move_key(f, t)
-        for f, t in _STAGE_TRANSITIONS
+        for f, t in STAGE_TRANSITIONS
         if _stage_move_key(f, t) not in terminal_actions
     ]
     for action in marketer_actions:
@@ -202,10 +201,10 @@ TEMPLATE: dict[str, Any] = {
     ),
     "is_system": True,
     "default_terminology": _TERMINOLOGY,
-    "default_stages": _STAGES,
+    "default_stages": STAGES,
     "default_roles": _ROLES,
     "default_role_permissions": _build_permissions(),
 }
 
 
-__all__ = ["TEMPLATE"]
+__all__ = ["STAGES", "STAGE_TRANSITIONS", "TEMPLATE"]

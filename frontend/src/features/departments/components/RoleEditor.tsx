@@ -26,7 +26,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PermissionMatrixEditor } from "@/features/departments/components/PermissionMatrixEditor";
-import { useDepartmentStages } from "@/features/departments/hooks/useDepartmentStages";
+import { useTemplateStages } from "@/features/departments/hooks/useTemplateStages";
 import { availableActionKeys } from "@/features/departments/lib/permissionLabel";
 import {
   createRole,
@@ -51,7 +51,7 @@ export function RoleEditor({ department }: { department: Department }) {
   const t = useTranslations("departments");
   const tCommon = useTranslations("common");
   const departmentId = department.id;
-  const { stages } = useDepartmentStages(departmentId);
+  const stages = useTemplateStages(department.template_key);
   const [roles, setRoles] = useState<DepartmentRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);

@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { useDepartmentStages } from "@/features/departments/hooks/useDepartmentStages";
+import { useTemplateStages } from "@/features/departments/hooks/useTemplateStages";
 import { useStageLabel } from "@/features/departments/hooks/useStageLabel";
 import { listPermissions, upsertPermission } from "@/features/departments/api";
 import type { Department, DepartmentRole, Permission } from "@/features/departments/types";
@@ -52,8 +52,8 @@ export function PermissionMatrixEditor({
 }) {
   const t = useTranslations("departments");
   const tCommon = useTranslations("common");
-  const resolveStage = useStageLabel(role.department_id);
-  const { stages } = useDepartmentStages(role.department_id);
+  const resolveStage = useStageLabel(department.template_key);
+  const stages = useTemplateStages(department.template_key);
   const [rows, setRows] = useState<Permission[]>([]);
   const [loading, setLoading] = useState(true);
   const [pendingKey, setPendingKey] = useState<string | null>(null);

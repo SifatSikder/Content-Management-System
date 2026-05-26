@@ -14,7 +14,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getDepartment, updateDepartment } from "@/features/departments/api";
 import { DepartmentMembersEditor } from "@/features/departments/components/DepartmentMembersEditor";
 import { RoleEditor } from "@/features/departments/components/RoleEditor";
-import { StageEditor } from "@/features/departments/components/StageEditor";
 import type { Department } from "@/features/departments/types";
 import { ApiError } from "@/lib/api-client";
 
@@ -169,7 +168,6 @@ export default function DepartmentDetailPage() {
           </Tabs>
         </CardContent>
       </Card>
-      <StageEditor departmentId={department.id} />
     </div>
   );
 }

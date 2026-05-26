@@ -7,6 +7,10 @@ Cursor pagination: cursors are opaque base64 strings encoding
 `<created_at_iso>|<uuid>`. The list query orders by `(created_at DESC, id DESC)`
 and uses the cursor as a `(created_at, id) <` filter for stability across
 inserts.
+
+Stages are not a DB table — see `app.services.stage_registry`. Projects
+store a `stage_key` string and the registry resolves it against the
+department's `template_key`.
 """
 
 from __future__ import annotations
@@ -21,11 +25,11 @@ import structlog
 from sqlalchemy import ColumnElement, and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.department_stage import DepartmentStageModel
+from app.models.department import DepartmentModel
 from app.models.enums import Category, Role
 from app.models.project import ProjectModel
 from app.models.user import UserModel
-from app.services import activity_service
+from app.services import activity_service, stage_registry
 
 log = structlog.get_logger(__name__)
 
@@ -42,7 +46,7 @@ class InvalidCursorError(Exception):
 
 
 class StageNotFoundError(Exception):
-    """No stage with the given key exists in the requested department."""
+    """No stage with the given key exists in the project's template."""
 
 
 @dataclass(frozen=True)
@@ -68,43 +72,24 @@ def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
         raise InvalidCursorError(f"Invalid cursor: {cursor!r}") from exc
 
 
-async def _first_stage_id_for_department(
+async def _entry_stage_key(
     session: AsyncSession, *, department_id: uuid.UUID
-) -> uuid.UUID:
-    """Return the lowest-order_index stage in a department.
+) -> str:
+    """Return the first stage key for the department's template.
 
-    Used as the initial stage for newly-created projects. Raises if the
-    department has no stages — that's a misconfiguration (every template
-    must define at least one).
+    Raises if the department has no template or the template has no stages
+    — that's a misconfiguration.
     """
-    result = await session.execute(
-        select(DepartmentStageModel.id)
-        .where(DepartmentStageModel.department_id == department_id)
-        .order_by(DepartmentStageModel.order_index.asc(), DepartmentStageModel.created_at.asc())
-        .limit(1)
-    )
-    stage_id = result.scalar_one_or_none()
-    if stage_id is None:
+    department = await session.get(DepartmentModel, department_id)
+    if department is None:
+        raise StageNotFoundError(f"Department {department_id} not found")
+    stage_key = stage_registry.first_stage_key(department.template_key)
+    if stage_key is None:
         raise StageNotFoundError(
-            f"Department {department_id} has no stages — cannot create a project"
+            f"Department {department_id} (template={department.template_key!r}) "
+            "has no stages — cannot create a project"
         )
-    return stage_id
-
-
-async def resolve_stage_id_by_key(
-    session: AsyncSession,
-    *,
-    department_id: uuid.UUID,
-    key: str,
-) -> uuid.UUID | None:
-    """Return the stage id whose key matches inside the given department."""
-    result = await session.execute(
-        select(DepartmentStageModel.id).where(
-            DepartmentStageModel.department_id == department_id,
-            DepartmentStageModel.key == key,
-        )
-    )
-    return result.scalar_one_or_none()
+    return stage_key
 
 
 async def create_project(
@@ -118,12 +103,12 @@ async def create_project(
     description: str | None = None,
     due_date: object | None = None,
     owner_id_override: uuid.UUID | None = None,
-    stage_id: uuid.UUID | None = None,
+    stage_key: str | None = None,
 ) -> ProjectModel:
     """Create a project. Activity row + commit are the caller's responsibility.
 
-    `stage_id` defaults to the department's first stage (lowest order_index)
-    so the caller doesn't have to know about the per-template entry stage.
+    `stage_key` defaults to the department template's entry stage (first in
+    the registry list) so the caller doesn't have to know which one that is.
     """
     owner = actor
     if owner_id_override is not None and actor.role in (Role.CEO, Role.ASSISTANT_DIRECTOR):
@@ -132,10 +117,16 @@ async def create_project(
             raise ProjectNotFoundError(f"owner_id_override {owner_id_override} not found")
         owner = override
 
-    if stage_id is None:
-        stage_id = await _first_stage_id_for_department(
-            session, department_id=department_id
-        )
+    if stage_key is None:
+        stage_key = await _entry_stage_key(session, department_id=department_id)
+    else:
+        department = await session.get(DepartmentModel, department_id)
+        if department is None or not stage_registry.is_known_stage(
+            department.template_key, stage_key
+        ):
+            raise StageNotFoundError(
+                f"Stage {stage_key!r} not in template for department {department_id}"
+            )
 
     project = ProjectModel(
         title=title,
@@ -143,15 +134,15 @@ async def create_project(
         category=category,
         business_id=business_id,
         department_id=department_id,
-        stage_id=stage_id,
+        stage_key=stage_key,
         owner=owner,
         due_date=due_date,
     )
     session.add(project)
     await session.flush()
-    # Eager-load the relationships so callers can read `project.stage.key`
+    # Eager-load the department so callers can read `project.department`
     # immediately after creation without an extra refresh.
-    await session.refresh(project, attribute_names=["stage", "department"])
+    await session.refresh(project, attribute_names=["department"])
 
     await activity_service.record(
         session,
@@ -199,16 +190,7 @@ async def list_projects(
     if filters.owner_id is not None:
         where.append(ProjectModel.owner_id == filters.owner_id)
     if filters.stage_key is not None:
-        # Join through department_stages to filter by stage key. The
-        # business-context RLS policy already scopes stages to the current
-        # business so the comparison is unambiguous within one tenant.
-        where.append(
-            ProjectModel.stage_id.in_(
-                select(DepartmentStageModel.id).where(
-                    DepartmentStageModel.key == filters.stage_key
-                )
-            )
-        )
+        where.append(ProjectModel.stage_key == filters.stage_key)
 
     query = select(ProjectModel).where(and_(*where)) if where else select(ProjectModel)
     query = query.order_by(ProjectModel.created_at.desc(), ProjectModel.id.desc())
@@ -279,33 +261,71 @@ async def move_stage(
     *,
     actor: UserModel,
     project: ProjectModel,
-    target_stage_id: uuid.UUID,
+    target_stage_key: str,
 ) -> ProjectModel:
-    """Move the project to `target_stage_id`. Permission check is the caller's
+    """Move the project to `target_stage_key`. Permission check is the caller's
     job via `permission_service.can_user_move_to_stage` — this function just
     performs the write + activity log.
-    """
-    if project.stage_id == target_stage_id:
-        return project
-    previous_key = project.stage.key if project.stage else None
-    target_q = await session.execute(
-        select(DepartmentStageModel).where(DepartmentStageModel.id == target_stage_id)
-    )
-    target = target_q.scalar_one_or_none()
-    if target is None:
-        raise StageNotFoundError(str(target_stage_id))
 
-    project.stage_id = target_stage_id
-    project.stage = target  # keep the relationship in sync for downstream reads
+    Validates `target_stage_key` against the department's template registry
+    and rejects unknown keys.
+    """
+    if project.stage_key == target_stage_key:
+        return project
+
+    department = project.department or await session.get(DepartmentModel, project.department_id)
+    if department is None or not stage_registry.is_known_stage(
+        department.template_key, target_stage_key
+    ):
+        raise StageNotFoundError(
+            f"Stage {target_stage_key!r} not in template "
+            f"{department.template_key if department else '<missing>'}"
+        )
+
+    previous_key = project.stage_key
+    project.stage_key = target_stage_key
 
     await activity_service.record(
         session,
         project_id=project.id,
         actor_id=actor.id,
         action="project.stage_changed",
-        metadata={"from": previous_key, "to": target.key},
+        metadata={"from": previous_key, "to": target_stage_key},
     )
     return project
+
+
+async def auto_bump_stage(
+    session: AsyncSession,
+    *,
+    project: ProjectModel,
+    target_key: str,
+    actor_id: uuid.UUID,
+) -> None:
+    """Best-effort "advance to this stage" called from feature services
+    (script/edit/cast/shoot/location) when a domain event implies the
+    project should auto-move forward.
+
+    No-op if the target key isn't in this template, the project already
+    sits on it, or the department can't be loaded. Permission checks are
+    intentionally skipped — these calls happen inside trusted server-side
+    flows triggered by other user actions that already passed their own
+    permission gates.
+    """
+    department = project.department or await session.get(DepartmentModel, project.department_id)
+    if department is None or not stage_registry.is_known_stage(department.template_key, target_key):
+        return
+    if project.stage_key == target_key:
+        return
+    previous_key = project.stage_key
+    project.stage_key = target_key
+    await activity_service.record(
+        session,
+        project_id=project.id,
+        actor_id=actor_id,
+        action="project.stage_changed",
+        metadata={"from": previous_key, "to": target_key},
+    )
 
 
 async def soft_delete(
@@ -343,11 +363,11 @@ __all__ = [
     "ListFilters",
     "ProjectNotFoundError",
     "StageNotFoundError",
+    "auto_bump_stage",
     "create_project",
     "get_project",
     "list_projects",
     "move_stage",
-    "resolve_stage_id_by_key",
     "restore",
     "soft_delete",
     "update_project",

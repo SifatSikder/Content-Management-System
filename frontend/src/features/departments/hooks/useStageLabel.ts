@@ -3,21 +3,21 @@
 import { useLocale } from "next-intl";
 import { useMemo } from "react";
 
-import { useDepartmentStages } from "@/features/departments/hooks/useDepartmentStages";
+import { useTemplateStages } from "@/features/departments/hooks/useTemplateStages";
 
 /**
  * Resolve a stage `key` (e.g. `"idea"`) to its localized display name
- * within a given department.
+ * within a department template.
  *
  * Returns a lookup function so callers can render many stage labels from
- * one hook invocation. Until the stages load the lookup returns the raw
- * key — better than a flash-of-empty for a kanban-style component.
+ * one hook invocation. Pass `null` while the parent template_key is still
+ * loading — the lookup will then return the raw key as a fallback.
  */
 export function useStageLabel(
-  departmentId: string | null | undefined,
+  templateKey: string | null | undefined,
 ): (key: string) => string {
   const locale = useLocale();
-  const { stages } = useDepartmentStages(departmentId);
+  const stages = useTemplateStages(templateKey);
   return useMemo(() => {
     const byKey = new Map(stages.map((s) => [s.key, s] as const));
     return (key: string) => {

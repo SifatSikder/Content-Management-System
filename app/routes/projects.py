@@ -12,7 +12,6 @@ from typing import Annotated
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import select
 
 from app.auth.dependencies import (
     CurrentUser,
@@ -22,7 +21,6 @@ from app.auth.dependencies import (
     require_project_access,
 )
 from app.models.department import DepartmentModel
-from app.models.department_stage import DepartmentStageModel
 from app.models.project import ProjectModel
 from app.schemas.activity import ActivityListResponse, ActivityPublic
 from app.schemas.project import (
@@ -98,7 +96,7 @@ async def post_project(
             description=body.description,
             due_date=body.due_date,
             owner_id_override=body.owner_id,
-            stage_id=body.stage_id,
+            stage_key=body.stage_key,
         )
     except StageNotFoundError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
@@ -174,17 +172,11 @@ async def post_project_stage(
     session: SessionDep,
     request: Request,
 ) -> ProjectPublic:
-    target_stage_id = await _resolve_target_stage_id(session, project, body)
-    if target_stage_id is None:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "Unknown target stage for this department"
-        )
-
     allowed = await permission_service.can_user_move_to_stage(
         session,
         user=user,
         project=project,
-        target_stage_id=target_stage_id,
+        target_stage_key=body.stage_key,
         request=request,
     )
     if not allowed:
@@ -193,43 +185,19 @@ async def post_project_stage(
             user_id=str(user.id),
             user_role=user.role.value,
             project_id=str(project.id),
-            target_stage_id=str(target_stage_id),
+            target_stage_key=body.stage_key,
         )
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not allowed to move to that stage")
 
     try:
         await project_service.move_stage(
-            session, actor=user, project=project, target_stage_id=target_stage_id
+            session, actor=user, project=project, target_stage_key=body.stage_key
         )
     except StageNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     await session.commit()
     await session.refresh(project)
     return ProjectPublic.model_validate(project)
-
-
-async def _resolve_target_stage_id(
-    session: SessionDep, project: ProjectModel, body: MoveStageBody
-) -> uuid.UUID | None:
-    """Resolve `MoveStageBody` to a concrete stage id inside the project's
-    department.
-
-      * If `stage_id` is set, validate it belongs to the department.
-      * Else, resolve `stage_key` against the department's stages.
-    """
-    if body.stage_id is not None:
-        result = await session.execute(
-            select(DepartmentStageModel.id).where(
-                DepartmentStageModel.id == body.stage_id,
-                DepartmentStageModel.department_id == project.department_id,
-            )
-        )
-        return result.scalar_one_or_none()
-    if body.stage_key is not None:
-        return await project_service.resolve_stage_id_by_key(
-            session, department_id=project.department_id, key=body.stage_key
-        )
-    return None
 
 
 @router.delete(

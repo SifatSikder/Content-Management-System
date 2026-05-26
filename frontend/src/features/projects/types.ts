@@ -7,22 +7,9 @@ export interface OwnerPublic {
 }
 
 /**
- * Stage projection embedded in `Project.stage` — what the kanban column +
- * header badge need to render. Mirrors `app/schemas/project.py::StagePublic`.
- */
-export interface ProjectStage {
-  id: string;
-  key: string;
-  name_i18n: Record<string, string>;
-  order_index: number;
-  is_terminal: boolean;
-  color: string | null;
-}
-
-/**
  * Minimal department embed on a project response — surfaces `template_key`
- * (drives the per-template tab map) + `terminology` (per-noun i18n
- * overrides). Mirrors `app/schemas/project.py::DepartmentEmbed`.
+ * (drives the per-template tab map + stage registry lookup) + `terminology`
+ * (per-noun i18n overrides). Mirrors `app/schemas/project.py::DepartmentEmbed`.
  */
 export interface ProjectDepartment {
   id: string;
@@ -39,8 +26,8 @@ export interface Project {
   category: Category;
   business_id: string;
   department_id: string;
-  stage_id: string;
-  stage: ProjectStage;
+  /** Stage key from the department template's `STAGES` registry. */
+  stage_key: string;
   department: ProjectDepartment;
   owner_id: string;
   owner: OwnerPublic;
@@ -66,7 +53,7 @@ export interface CreateProjectBody {
   description?: string | null;
   due_date?: string | null;
   owner_id?: string;
-  stage_id?: string;
+  stage_key?: string;
 }
 
 export interface UpdateProjectBody {
@@ -76,9 +63,8 @@ export interface UpdateProjectBody {
   due_date?: string | null;
 }
 
-/** Body for POST /projects/{id}/stage — supply either id (preferred) or key. */
+/** Body for POST /projects/{id}/stage. */
 export interface MoveStageBody {
-  stage_id?: string;
-  stage_key?: string;
+  stage_key: string;
 }
 

@@ -12,6 +12,10 @@ import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useTerminology } from "@/features/departments/hooks/useTerminology";
 import { BriefTab } from "@/features/projects/components/BriefTab";
 import { tabsForTemplate } from "@/features/projects/lib/projectTabs";
+import {
+  getStage,
+  localizedStageLabel,
+} from "@/features/projects/lib/stagesByTemplate";
 import { getProject } from "@/features/projects/api";
 import type { Project } from "@/features/projects/types";
 import { ApiError } from "@/lib/api-client";
@@ -93,11 +97,8 @@ export default function ProjectDetailPage() {
   }
 
   const isOwner = project.owner_id === auth.user.id;
-  const stageLabel =
-    project.stage.name_i18n[locale] ??
-    project.stage.name_i18n.en ??
-    project.stage.name_i18n.nl ??
-    project.stage.key;
+  const stageSpec = getStage(project.department.template_key, project.stage_key);
+  const stageLabel = localizedStageLabel(stageSpec, locale, project.stage_key);
   const tabs = tabsForTemplate(project.department.template_key);
   const briefTabLabel = noun("tab_brief", tDetail("tab_brief"));
 

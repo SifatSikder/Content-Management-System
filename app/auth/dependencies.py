@@ -241,7 +241,7 @@ async def can_user_move_to_stage(
     session: AsyncSession,
     user: UserModel,
     project: ProjectModel,
-    target_stage_id: uuid.UUID,
+    target_stage_key: str,
     *,
     request: Request | None = None,
 ) -> bool:
@@ -257,7 +257,7 @@ async def can_user_move_to_stage(
         session,
         user=user,
         project=project,
-        target_stage_id=target_stage_id,
+        target_stage_key=target_stage_key,
         request=request,
     )
 

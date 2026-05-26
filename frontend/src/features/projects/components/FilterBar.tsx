@@ -13,11 +13,12 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import type { Role } from "@/features/auth/constants";
-import { useDepartmentStages } from "@/features/departments/hooks/useDepartmentStages";
+import { useTemplateStages } from "@/features/departments/hooks/useTemplateStages";
 import { useTerminology } from "@/features/departments/hooks/useTerminology";
 import type { Terminology } from "@/features/departments/types";
 import { useCanIDo } from "@/features/permissions/hooks/usePermissions";
 import { CreateProjectDialog } from "@/features/projects/components/CreateProjectDialog";
+import { localizedStageLabel } from "@/features/projects/lib/stagesByTemplate";
 import type { Project } from "@/features/projects/types";
 
 interface Props {
@@ -30,6 +31,8 @@ interface Props {
   onCreated: (p: Project) => void;
   /** Department whose stages drive the dropdown + new-project default. */
   departmentId: string;
+  /** Department template — picks the right stage list from the registry. */
+  templateKey: string | null | undefined;
   /**
    * Department's terminology JSONB. When the template carries an override
    * (Marketing has `create_project = "New lead"`), the create button label
@@ -46,19 +49,16 @@ export function FilterBar({
   setStage,
   onCreated,
   departmentId,
+  templateKey,
   terminology,
 }: Props) {
   const tProj = useTranslations("projects");
   const tCommon = useTranslations("common");
   const locale = useLocale();
   const noun = useTerminology(terminology);
-  const { stages } = useDepartmentStages(departmentId);
+  const stages = useTemplateStages(templateKey);
   // Hidden until the permission map loads; same tradeoff as ScriptTab.
   const canCreate = useCanIDo(departmentId, "project.create");
-
-  function stageLabel(s: { name_i18n: Record<string, string>; key: string }): string {
-    return s.name_i18n[locale] ?? s.name_i18n.en ?? s.name_i18n.nl ?? s.key;
-  }
 
   return (
     <div className="flex flex-wrap items-center gap-3 border-b px-4 py-3 md:px-6">
@@ -78,8 +78,8 @@ export function FilterBar({
           <SelectContent>
             <SelectItem value="all">{tCommon("all")}</SelectItem>
             {stages.map((s) => (
-              <SelectItem key={s.id} value={s.key}>
-                {stageLabel(s)}
+              <SelectItem key={s.key} value={s.key}>
+                {localizedStageLabel(s, locale, s.key)}
               </SelectItem>
             ))}
           </SelectContent>

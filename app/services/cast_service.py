@@ -28,20 +28,8 @@ async def _advance_stage(
     target_key: str,
     actor_id: uuid.UUID,
 ) -> None:
-    target_id = await project_service.resolve_stage_id_by_key(
-        session, department_id=project.department_id, key=target_key
-    )
-    if target_id is None or target_id == project.stage_id:
-        return
-    previous_key = project.stage.key
-    project.stage_id = target_id
-    await session.refresh(project, attribute_names=["stage"])
-    await activity_service.record(
-        session,
-        project_id=project.id,
-        actor_id=actor_id,
-        action="project.stage_changed",
-        metadata={"from": previous_key, "to": target_key},
+    await project_service.auto_bump_stage(
+        session, project=project, target_key=target_key, actor_id=actor_id
     )
 
 
@@ -170,7 +158,7 @@ async def confirm_cast_member(
     # Stage auto-advance casting → shoot_scheduled requires:
     #   1. at least one location confirmed
     #   2. at least one cast member, all confirmed
-    if confirmed and project.stage.key == "casting":
+    if confirmed and project.stage_key == "casting":
         loc_q = await session.execute(
             select(LocationModel)
             .where(LocationModel.project_id == project.id)

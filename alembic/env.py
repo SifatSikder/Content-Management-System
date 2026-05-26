@@ -27,7 +27,6 @@ from app.models import department_event_definition as _department_event_definiti
 from app.models import department_membership as _department_membership  # noqa: F401
 from app.models import department_role as _department_role  # noqa: F401
 from app.models import department_role_permission as _department_role_permission  # noqa: F401
-from app.models import department_stage as _department_stage  # noqa: F401
 from app.models import department_template as _department_template  # noqa: F401
 from app.models import edit as _edit  # noqa: F401
 from app.models import location as _location  # noqa: F401

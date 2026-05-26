@@ -36,41 +36,6 @@ export interface UpdateDepartmentBody {
   name?: string;
 }
 
-export interface Stage {
-  id: string;
-  department_id: string;
-  business_id: string;
-  key: string;
-  name_i18n: Record<string, string>;
-  order_index: number;
-  is_terminal: boolean;
-  color: string | null;
-  allowed_from_stage_ids: string[];
-  created_at: string;
-  updated_at: string;
-}
-
-export interface StageListResponse {
-  items: Stage[];
-}
-
-export interface CreateStageBody {
-  key: string;
-  name_i18n: Record<string, string>;
-  order_index?: number;
-  is_terminal?: boolean;
-  color?: string | null;
-  allowed_from_stage_ids?: string[];
-}
-
-export interface UpdateStageBody {
-  name_i18n?: Record<string, string>;
-  order_index?: number;
-  is_terminal?: boolean;
-  color?: string | null;
-  allowed_from_stage_ids?: string[];
-}
-
 export interface DepartmentRole {
   id: string;
   department_id: string;

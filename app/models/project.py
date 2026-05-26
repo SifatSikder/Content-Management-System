@@ -1,9 +1,10 @@
 """Project model — the central entity. Each row is one production unit
 inside a department's pipeline.
 
-Stage is read via the `stage` relationship to `department_stages`; the
-legacy `PipelineStage` enum column was dropped in Phase B. Soft-deleted
-with a 30-day window per spec §10.
+Stages live in code per template (`app/services/stage_registry.py`) — the
+`department_stages` table was dropped 2026-05-26. The project just stores a
+`stage_key` string referencing one of the template's stage definitions.
+Soft-deleted with a 30-day window per spec §10.
 """
 
 from __future__ import annotations
@@ -17,7 +18,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.department import DepartmentModel
-from app.models.department_stage import DepartmentStageModel
 from app.models.enums import Category, pg_enum
 from app.models.user import UserModel
 
@@ -45,19 +45,11 @@ class ProjectModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         index=True,
     )
-    stage_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("department_stages.id", ondelete="RESTRICT"),
-        nullable=False,
-        index=True,
-    )
+    # Stage key referencing the in-code registry for the project's department
+    # template. Validation happens in services / routes — there is no DB-level
+    # FK because stages aren't a table anymore.
+    stage_key: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
 
-    # Eager-loaded so `project.stage.key` is always available without an
-    # extra round-trip. Every project page reads it; lazy would just punt
-    # one query for every project to a follow-up SELECT.
-    stage: Mapped[DepartmentStageModel] = relationship(
-        DepartmentStageModel, foreign_keys=[stage_id], lazy="selectin"
-    )
     department: Mapped[DepartmentModel] = relationship(
         DepartmentModel, foreign_keys=[department_id], lazy="selectin"
     )

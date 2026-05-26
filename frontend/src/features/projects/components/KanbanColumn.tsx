@@ -5,34 +5,32 @@ import { useLocale, useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import { ProjectCard } from "@/features/projects/components/ProjectCard";
-import type { Stage } from "@/features/departments/types";
 import type { Project } from "@/features/projects/types";
+import { localizedStageLabel, type StageSpec } from "@/features/projects/lib/stagesByTemplate";
 import { cn } from "@/lib/utils";
 
 interface Props {
-  stage: Stage;
+  stage: StageSpec;
   projects: Project[];
   canDrop: boolean;
 }
 
 /**
  * One column on the kanban. The displayed name comes from `stage.name_i18n`
- * (the department-editable label) with a fall-back to `stage.key` so a
- * department that just renamed a stage in another language still renders
- * cleanly. Drop target id is the stage's uuid so the drag handler can
- * forward it straight to `moveStage({ stage_id })`.
+ * (the template's label) with a fall-back to `stage.key`. Drop target id is
+ * the stage's `key`, so the drag handler can forward it straight to
+ * `moveStage({ stage_key })`.
  */
 export function KanbanColumn({ stage, projects, canDrop }: Props) {
   const locale = useLocale();
   const tProj = useTranslations("projects");
   const { isOver, setNodeRef } = useDroppable({
-    id: stage.id,
-    data: { stageId: stage.id, stageKey: stage.key },
+    id: stage.key,
+    data: { stageKey: stage.key },
     disabled: !canDrop,
   });
 
-  const label =
-    stage.name_i18n[locale] ?? stage.name_i18n.en ?? stage.name_i18n.nl ?? stage.key;
+  const label = localizedStageLabel(stage, locale, stage.key);
 
   return (
     <div

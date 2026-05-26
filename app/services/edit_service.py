@@ -46,20 +46,8 @@ async def _advance_stage(
     """Resolve `target_key` to a stage_id inside `project.department_id` and
     move the project there. No-op if the target key doesn't exist in the
     department (other templates may not model this transition)."""
-    target_id = await project_service.resolve_stage_id_by_key(
-        session, department_id=project.department_id, key=target_key
-    )
-    if target_id is None or target_id == project.stage_id:
-        return
-    previous_key = project.stage.key
-    project.stage_id = target_id
-    await session.refresh(project, attribute_names=["stage"])
-    await activity_service.record(
-        session,
-        project_id=project.id,
-        actor_id=actor_id,
-        action="project.stage_changed",
-        metadata={"from": previous_key, "to": target_key},
+    await project_service.auto_bump_stage(
+        session, project=project, target_key=target_key, actor_id=actor_id
     )
 
 
@@ -109,7 +97,7 @@ async def add_edit_version(
     await session.flush()
 
     # First edit upload advances the project to "editing".
-    if project.stage.key not in ("editing", "final_review", "approved_published"):
+    if project.stage_key not in ("editing", "final_review", "approved_published"):
         await _advance_stage(session, project=project, target_key="editing", actor_id=uploader.id)
 
     await activity_service.record(
@@ -144,7 +132,7 @@ async def approve_edit(
 
     # CEO approval → "approved_published" (terminal stage). Anyone else's
     # approve just records the decision without moving the project.
-    if actor.role == Role.CEO and project.stage.key != "approved_published":
+    if actor.role == Role.CEO and project.stage_key != "approved_published":
         await _advance_stage(
             session, project=project, target_key="approved_published", actor_id=actor.id
         )
@@ -176,7 +164,7 @@ async def request_changes(
     edit.notes = notes
 
     # Make sure the project is in "editing" so the editor can upload V+1.
-    if project.stage.key != "editing":
+    if project.stage_key != "editing":
         await _advance_stage(session, project=project, target_key="editing", actor_id=actor.id)
 
     await activity_service.record(

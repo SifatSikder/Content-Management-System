@@ -65,7 +65,7 @@ async def add_version(
     author: UserModel,
     body_markdown: str,
 ) -> ScriptVersionModel:
-    if project.stage.key == "script_locked":
+    if project.stage_key == "script_locked":
         raise IllegalStageTransitionError("Cannot add a version while the script is locked")
 
     script = await _get_or_create_script(session, project)
@@ -84,7 +84,7 @@ async def add_version(
     # First version moves the project past "idea" into "script_drafting" —
     # both are template stage keys on Content Creation. For other templates
     # without these specific keys, the auto-advance simply doesn't fire.
-    if project.stage.key == "idea":
+    if project.stage_key == "idea":
         await _advance_stage(session, project=project, target_key="script_drafting", actor_id=author.id)
 
     await activity_service.record(
@@ -107,22 +107,8 @@ async def _advance_stage(
     """Best-effort auto-advance to `target_key` within the project's
     department. No-op if the target key doesn't exist (e.g. the
     department's workflow doesn't model this transition)."""
-    target_id = await project_service.resolve_stage_id_by_key(
-        session, department_id=project.department_id, key=target_key
-    )
-    if target_id is None or target_id == project.stage_id:
-        return
-    previous_key = project.stage.key
-    project.stage_id = target_id
-    # Refresh the relationship so subsequent reads see the new stage's key
-    # without an extra round-trip.
-    await session.refresh(project, attribute_names=["stage"])
-    await activity_service.record(
-        session,
-        project_id=project.id,
-        actor_id=actor_id,
-        action="project.stage_changed",
-        metadata={"from": previous_key, "to": target_key},
+    await project_service.auto_bump_stage(
+        session, project=project, target_key=target_key, actor_id=actor_id
     )
 
 
@@ -255,9 +241,9 @@ async def reopen_comment(
 async def submit_script(
     session: AsyncSession, *, project: ProjectModel, actor: UserModel
 ) -> ProjectModel:
-    if project.stage.key != "script_drafting":
+    if project.stage_key != "script_drafting":
         raise IllegalStageTransitionError(
-            f"Cannot submit from stage {project.stage.key}"
+            f"Cannot submit from stage {project.stage_key}"
         )
     # Mark the latest version as submitted.
     result = await session.execute(
@@ -285,9 +271,9 @@ async def submit_script(
 async def lock_script(
     session: AsyncSession, *, project: ProjectModel, actor: UserModel
 ) -> ProjectModel:
-    if project.stage.key not in ("script_drafting", "script_review"):
+    if project.stage_key not in ("script_drafting", "script_review"):
         raise IllegalStageTransitionError(
-            f"Cannot lock from stage {project.stage.key}"
+            f"Cannot lock from stage {project.stage_key}"
         )
     await _advance_stage(session, project=project, target_key="script_locked", actor_id=actor.id)
     project.script_locked_at = datetime.now(UTC)
@@ -305,9 +291,9 @@ async def lock_script(
 async def unlock_script(
     session: AsyncSession, *, project: ProjectModel, actor: UserModel
 ) -> ProjectModel:
-    if project.stage.key != "script_locked":
+    if project.stage_key != "script_locked":
         raise IllegalStageTransitionError(
-            f"Cannot unlock from stage {project.stage.key}"
+            f"Cannot unlock from stage {project.stage_key}"
         )
     await _advance_stage(session, project=project, target_key="script_review", actor_id=actor.id)
     project.script_locked_at = None

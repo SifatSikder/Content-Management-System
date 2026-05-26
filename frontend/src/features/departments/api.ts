@@ -3,7 +3,6 @@ import { apiFetchAuthed, localFetch } from "@/lib/api-client";
 import type {
   CreateDepartmentBody,
   CreateRoleBody,
-  CreateStageBody,
   Department,
   DepartmentListResponse,
   DepartmentMembership,
@@ -14,11 +13,8 @@ import type {
   Permission,
   PermissionListResponse,
   RoleListResponse,
-  Stage,
-  StageListResponse,
   UpdateDepartmentBody,
   UpdateRoleBody,
-  UpdateStageBody,
   UpsertPermissionBody,
 } from "./types";
 
@@ -56,39 +52,6 @@ export function updateDepartment(
 
 export function archiveDepartment(id: string): Promise<void> {
   return apiFetchAuthed<void>(`/departments/${id}`, { method: "DELETE" });
-}
-
-// --- Stages --------------------------------------------------------------
-
-export function listStages(departmentId: string): Promise<StageListResponse> {
-  return apiFetchAuthed<StageListResponse>(`/departments/${departmentId}/stages`);
-}
-
-export function createStage(
-  departmentId: string,
-  body: CreateStageBody,
-): Promise<Stage> {
-  return apiFetchAuthed<Stage>(`/departments/${departmentId}/stages`, {
-    method: "POST",
-    body: body as unknown as BodyInit,
-  });
-}
-
-export function updateStage(
-  departmentId: string,
-  stageId: string,
-  body: UpdateStageBody,
-): Promise<Stage> {
-  return apiFetchAuthed<Stage>(`/departments/${departmentId}/stages/${stageId}`, {
-    method: "PATCH",
-    body: body as unknown as BodyInit,
-  });
-}
-
-export function deleteStage(departmentId: string, stageId: string): Promise<void> {
-  return apiFetchAuthed<void>(`/departments/${departmentId}/stages/${stageId}`, {
-    method: "DELETE",
-  });
 }
 
 // --- Roles ---------------------------------------------------------------

@@ -15,7 +15,6 @@
  */
 
 import { permissionActionsForTemplate } from "@/features/departments/lib/permissionActionsByTemplate";
-import type { Stage } from "@/features/departments/types";
 
 export type PermissionGroup =
   | "project"
@@ -174,29 +173,33 @@ const PROJECT_ACTIONS: readonly string[] = [
  *   * project.* — always
  *   * template-defined capability action keys (from
  *     `permissionActionsByTemplate.ts`)
- *   * stage.move:<from>-><to> — derived from each stage's
- *     `allowed_from_stage_ids`
+ *   * stage.move:<from>-><to> — derived from each stage spec's
+ *     `allowed_from_stage_keys` (template-defined, see
+ *     `features/projects/lib/stagesByTemplate.ts`).
  *
  * Rows already in the DB whose key isn't in this list still render — the
  * matrix merges this list with the persisted rows.
  */
 export function availableActionKeys(
   templateKey: string | null | undefined,
-  stages: readonly Stage[],
+  stages: readonly StageLike[],
 ): string[] {
   const keys: string[] = [...PROJECT_ACTIONS];
   keys.push(...permissionActionsForTemplate(templateKey));
 
-  // Stage transitions: target.allowed_from_stage_ids tells us which source
-  // stages can flow into `target`. Resolve those ids back to stage keys.
-  const byId = new Map(stages.map((s) => [s.id, s] as const));
+  // Stage transitions: target.allowed_from_stage_keys lists which source
+  // stages can flow into `target`.
   for (const target of stages) {
-    for (const fromId of target.allowed_from_stage_ids) {
-      const from = byId.get(fromId);
-      if (!from) continue;
-      keys.push(`stage.move:${from.key}->${target.key}`);
+    for (const fromKey of target.allowed_from_stage_keys) {
+      keys.push(`stage.move:${fromKey}->${target.key}`);
     }
   }
 
   return keys;
+}
+
+/** Minimal stage shape used by `availableActionKeys`. */
+export interface StageLike {
+  key: string;
+  allowed_from_stage_keys: string[];
 }

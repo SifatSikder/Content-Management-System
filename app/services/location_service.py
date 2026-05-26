@@ -28,20 +28,8 @@ async def _advance_stage(
     target_key: str,
     actor_id: uuid.UUID,
 ) -> None:
-    target_id = await project_service.resolve_stage_id_by_key(
-        session, department_id=project.department_id, key=target_key
-    )
-    if target_id is None or target_id == project.stage_id:
-        return
-    previous_key = project.stage.key
-    project.stage_id = target_id
-    await session.refresh(project, attribute_names=["stage"])
-    await activity_service.record(
-        session,
-        project_id=project.id,
-        actor_id=actor_id,
-        action="project.stage_changed",
-        metadata={"from": previous_key, "to": target_key},
+    await project_service.auto_bump_stage(
+        session, project=project, target_key=target_key, actor_id=actor_id
     )
 
 
@@ -87,7 +75,7 @@ async def create_location(
     # First location on the project nudges the stage forward from idea/script
     # phases into "location_scouting". We don't auto-advance past scouting
     # until the location is confirmed (see `confirm_location`).
-    if project.stage.key in ("script_locked", "script_review", "script_drafting", "idea"):
+    if project.stage_key in ("script_locked", "script_review", "script_drafting", "idea"):
         await _advance_stage(
             session, project=project, target_key="location_scouting", actor_id=actor.id
         )
@@ -162,7 +150,7 @@ async def confirm_location(
     )
 
     # Spec §4 row 6: "Location confirmed" auto-advances location_scouting → casting.
-    if confirmed and project.stage.key == "location_scouting":
+    if confirmed and project.stage_key == "location_scouting":
         await _advance_stage(
             session, project=project, target_key="casting", actor_id=actor.id
         )
