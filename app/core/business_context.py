@@ -40,6 +40,7 @@ from starlette.types import ASGIApp
 
 from app.auth.jwt import InvalidTokenError, decode_access_token
 from app.models.base import get_session, get_sessionmaker
+from app.models.business import BusinessModel
 from app.models.business_membership import BusinessMembershipModel
 from app.models.enums import BusinessMembershipStatus, Role
 from app.models.user import UserModel
@@ -127,23 +128,41 @@ class BusinessContextMiddleware(BaseHTTPMiddleware):
         if bid is None:
             bid = _parse_uuid(request.headers.get("X-Business-Id"))
 
-        if bid is not None and not is_super_admin:
-            # Non-CEO must be an active member of the targeted business.
-            allowed = await self._user_is_active_member(user.id, bid)
-            if not allowed:
-                log.warning(
-                    "business_context_denied",
+        if bid is not None:
+            # Soft-deleted businesses are off-limits to everyone, including
+            # the CEO. Without this guard a super-admin can still reach the
+            # deleted business's data by passing X-Business-Id manually,
+            # because RLS short-circuits on is_super_admin=true.
+            if await self._business_is_deleted(bid):
+                log.info(
+                    "business_context_deleted",
                     user_id=str(user.id),
-                    user_role=user.role.value,
                     business_id=str(bid),
                 )
                 return JSONResponse(
-                    status_code=403,
+                    status_code=404,
                     content={
-                        "detail": "Not a member of this business",
+                        "detail": "Business not found",
                         "request_id": getattr(request.state, "request_id", None),
                     },
                 )
+            if not is_super_admin:
+                # Non-CEO must be an active member of the targeted business.
+                allowed = await self._user_is_active_member(user.id, bid)
+                if not allowed:
+                    log.warning(
+                        "business_context_denied",
+                        user_id=str(user.id),
+                        user_role=user.role.value,
+                        business_id=str(bid),
+                    )
+                    return JSONResponse(
+                        status_code=403,
+                        content={
+                            "detail": "Not a member of this business",
+                            "request_id": getattr(request.state, "request_id", None),
+                        },
+                    )
 
         request.state.current_business_id = bid
         return await call_next(request)
@@ -171,6 +190,22 @@ class BusinessContextMiddleware(BaseHTTPMiddleware):
                 )
             )
             return result.scalar_one_or_none()
+
+    async def _business_is_deleted(self, business_id: uuid.UUID) -> bool:
+        """Return True if the business row exists and is soft-deleted, or
+        does not exist at all. Either way the request must not proceed."""
+        sessionmaker = get_sessionmaker()
+        async with sessionmaker() as session:
+            await session.execute(text("SET LOCAL app.is_super_admin = 'true'"))
+            result = await session.execute(
+                select(BusinessModel.deleted_at).where(
+                    BusinessModel.id == business_id
+                )
+            )
+            row = result.first()
+            if row is None:
+                return True
+            return row[0] is not None
 
     async def _user_is_active_member(
         self, user_id: uuid.UUID, business_id: uuid.UUID
