@@ -184,6 +184,28 @@ async def lock_location(
     return project
 
 
+async def unlock_location(
+    session: AsyncSession, *, project: ProjectModel, actor: UserModel
+) -> ProjectModel:
+    """Clear the location lock so the Asst CEO can edit the location set
+    again. Idempotent — calling on an already-unlocked project no-ops.
+    Does NOT roll the stage back: if the project has already advanced
+    past `location_scouting` the caller can move it back manually if
+    they actually want to redo scouting from scratch.
+    """
+    if project.location_locked_at is None:
+        return project
+    project.location_locked_at = None
+    project.location_locked_by = None
+    await activity_service.record(
+        session,
+        project_id=project.id,
+        actor_id=actor.id,
+        action="location.unlocked",
+    )
+    return project
+
+
 async def delete_location(
     session: AsyncSession, *, location: LocationModel, actor: UserModel
 ) -> None:
@@ -273,5 +295,6 @@ __all__ = [
     "get_photo",
     "list_locations",
     "lock_location",
+    "unlock_location",
     "update_location",
 ]

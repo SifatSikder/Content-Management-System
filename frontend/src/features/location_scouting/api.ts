@@ -71,3 +71,10 @@ export function lockProjectLocation(projectId: string): Promise<{ status: string
     { method: "POST" },
   );
 }
+
+export function unlockProjectLocation(projectId: string): Promise<{ status: string }> {
+  return apiFetchAuthed<{ status: string }>(
+    `/projects/${projectId}/locations/unlock`,
+    { method: "POST" },
+  );
+}

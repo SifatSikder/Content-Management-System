@@ -131,6 +131,23 @@ async def post_lock_location(
     return {"status": "locked"}
 
 
+@projects_router.post(
+    "/unlock",
+    summary="Clear the location lock so the owner can edit the set again",
+    dependencies=[Depends(require_action("location.lock"))],
+)
+async def post_unlock_location(
+    project: Annotated[
+        ProjectModel, Depends(require_project_access(ProjectAccess.VIEW))
+    ],
+    user: CurrentUser,
+    session: SessionDep,
+) -> dict[str, str]:
+    await location_service.unlock_location(session, project=project, actor=user)
+    await session.commit()
+    return {"status": "unlocked"}
+
+
 # ---------- instance ----------
 
 async def _project_for_location(session: SessionDep, location: LocationModel) -> ProjectModel:

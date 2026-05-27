@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, MapPin, Trash2, X } from "lucide-react";
+import { Camera, Loader2, MapPin, Trash2, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -37,10 +37,31 @@ interface Props {
   onProjectUpdated?: (next: Project) => void;
 }
 
-export function LocationTab({ project, canInput = true }: Props) {
+export function LocationTab({
+  project,
+  canInput = true,
+  onProjectUpdated,
+}: Props) {
   const t = useTranslations("locations");
   const tCommon = useTranslations("common");
   const tErr = useTranslations("errors");
+
+  // Locked + assigned user is still read-only on adds/uploads/deletes
+  // until the lock is cleared. The Lock/Unlock button itself stays
+  // visible to whoever holds `location.lock` (gated inside the button).
+  const locationLocked = project.location_locked_at !== null;
+  const writable = canInput && !locationLocked;
+
+  async function reloadProject() {
+    try {
+      const next = await (
+        await import("@/features/projects/api")
+      ).getProject(project.id);
+      onProjectUpdated?.(next);
+    } catch {
+      // non-fatal — page will resync on next nav
+    }
+  }
 
   const [locations, setLocations] = useState<Location[] | null>(null);
   const [creating, setCreating] = useState(false);
@@ -91,9 +112,14 @@ export function LocationTab({ project, canInput = true }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
-        {canInput ? <LockLocationButton project={project} /> : null}
+        {canInput || locationLocked ? (
+          <LockLocationButton
+            project={project}
+            onChanged={() => void reloadProject()}
+          />
+        ) : null}
       </div>
-      {canInput && (
+      {writable && (
       <Card className="p-4">
         <form className="space-y-3" onSubmit={onCreate}>
           <div className="space-y-1.5">
@@ -163,7 +189,7 @@ export function LocationTab({ project, canInput = true }: Props) {
             <LocationRow
               key={loc.id}
               location={loc}
-              canInput={canInput}
+              canInput={writable}
               onChanged={reload}
             />
           ))}
@@ -187,6 +213,12 @@ function LocationRow({
   const tErr = useTranslations("errors");
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  // null = not uploading; otherwise tracks batch progress so the
+  // Add-photo button can show "Uploading X/Y…" with a spinner.
+  const [uploadProgress, setUploadProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
 
   const mapsHref =
     location.latitude !== null && location.longitude !== null
@@ -219,6 +251,7 @@ function LocationRow({
     if (valid.length === 0) return;
 
     setBusy(true);
+    setUploadProgress({ done: 0, total: valid.length });
     let succeeded = 0;
     try {
       for (const file of valid) {
@@ -237,6 +270,10 @@ function LocationRow({
           succeeded += 1;
         } catch {
           toast.error(t("photo_upload_failed_named", { name: file.name }));
+        } finally {
+          setUploadProgress((p) =>
+            p === null ? null : { ...p, done: p.done + 1 },
+          );
         }
       }
       if (succeeded > 0) {
@@ -249,6 +286,7 @@ function LocationRow({
       }
     } finally {
       setBusy(false);
+      setUploadProgress(null);
       if (fileInput.current) fileInput.current.value = "";
     }
   }
@@ -324,8 +362,18 @@ function LocationRow({
               onClick={() => fileInput.current?.click()}
               disabled={busy}
             >
-              <Camera className="mr-1.5 size-4" />
-              {t("add_photo")}
+              {uploadProgress ? (
+                <>
+                  <Loader2 className="mr-1.5 size-4 animate-spin" />
+                  Uploading {Math.min(uploadProgress.done + 1, uploadProgress.total)}
+                  /{uploadProgress.total}…
+                </>
+              ) : (
+                <>
+                  <Camera className="mr-1.5 size-4" />
+                  {t("add_photo")}
+                </>
+              )}
             </Button>
           </div>
         )}
@@ -392,20 +440,21 @@ function PhotoTile({
       ) : (
         <div className="bg-muted-foreground/10 size-full animate-pulse" />
       )}
-      <ConfirmDialog
-        title={t("delete_photo_confirm")}
-        confirmLabel={tCommon("delete")}
-        onConfirm={onDelete}
-      >
-        <button
-          type="button"
-          disabled={disabled}
-          className="bg-background/90 hover:bg-background absolute top-1 right-1 rounded-full p-0.5 disabled:opacity-50"
-          aria-label={tCommon("delete")}
+      {!disabled && (
+        <ConfirmDialog
+          title={t("delete_photo_confirm")}
+          confirmLabel={tCommon("delete")}
+          onConfirm={onDelete}
         >
-          <X className="size-3" />
-        </button>
-      </ConfirmDialog>
+          <button
+            type="button"
+            className="bg-background/90 hover:bg-background absolute top-1 right-1 rounded-full p-0.5"
+            aria-label={tCommon("delete")}
+          >
+            <X className="size-3" />
+          </button>
+        </ConfirmDialog>
+      )}
     </div>
   );
 }
