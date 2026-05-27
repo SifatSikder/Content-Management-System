@@ -109,6 +109,13 @@ async def post_version(
     user: CurrentUser,
     session: SessionDep,
 ) -> IdeaVersionPublic:
+    # Owner-only — reviewers (CEO/Director) only sign off; they don't
+    # draft new versions. Matches the patch + request-enhancement guards.
+    if project.owner_id != user.id and not user.is_super_admin:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Only the project owner can draft a new idea version",
+        )
     try:
         version = await idea_service.add_version(
             session, project=project, author=user, body_markdown=body.body_markdown

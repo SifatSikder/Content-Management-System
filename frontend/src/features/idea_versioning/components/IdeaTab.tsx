@@ -76,16 +76,17 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
 
-  // Edit-in-place mode: owner, idea not locked, no reviewers yet,
-  // there's a current version. While true, the textarea is pre-filled
-  // with the current body and saving PATCHes the same version instead
-  // of creating a new V.
+  // Edit-in-place mode: owner, idea not locked, current version has no
+  // signoffs on it yet. The signal is "has anyone reviewed *this*
+  // version" — not "are any reviewers assigned" — so V2/V3 are editable
+  // in place until a reviewer engages with them; the moment a signoff
+  // lands the next edit becomes a new version.
   const canEditInPlace =
     isOwner &&
     !!summary &&
     summary.locked_at === null &&
     summary.latest_version !== null &&
-    summary.reviewer_count === 0;
+    summary.latest_version_signoffs.length === 0;
 
   // Edit-in-place is no longer the default view; opening it requires an
   // explicit click. The moment that mode is no longer available (idea
@@ -175,6 +176,11 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
       const next = await unlockIdea(project.id);
       setSummary(next);
       toast.success("Idea unlocked — you can edit or save a new version");
+      // Mirrors handleLock: if we just rolled the stage back to draft_idea,
+      // the page needs to know so the kanban + tab routing reflect it.
+      if (project.stage_key === "script_drafting") {
+        onProjectUpdated?.({ ...project, stage_key: "draft_idea" });
+      }
     } catch (err) {
       toast.error(
         err instanceof ApiError ? err.message : "Failed to unlock idea",
@@ -314,7 +320,7 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
         </Card>
       ) : null}
 
-      {!locked && canEdit && !latest ? (
+      {!locked && canEdit && isOwner && !latest ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Draft idea V1</CardTitle>
@@ -337,7 +343,7 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
         </Card>
       ) : null}
 
-      {!locked && canEdit && latest && !canEditInPlace ? (
+      {!locked && canEdit && isOwner && latest && !canEditInPlace ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
@@ -362,10 +368,14 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
         </Card>
       ) : null}
 
-      {!latest ? (
+      {!latest && isOwner ? (
         <p className="text-muted-foreground text-sm">
           No idea version yet. Save the first draft above to kick off the
           review loop.
+        </p>
+      ) : !latest ? (
+        <p className="text-muted-foreground text-sm">
+          The project owner hasn&apos;t drafted an idea yet.
         </p>
       ) : null}
 

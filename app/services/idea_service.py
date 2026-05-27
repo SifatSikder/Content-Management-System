@@ -267,13 +267,11 @@ async def update_version_body(
     actor: UserModel,
     body_markdown: str,
 ) -> IdeaVersionModel:
-    """Edit the body of an existing idea version in place. Only allowed
-    while the idea is unlocked AND no reviewers have been pulled in
-    yet (i.e. before the owner has pressed Request feedback). After
-    that, edits start a new version via `add_version`.
-
-    Also enforces: the version must be the LATEST one — we don't allow
-    editing back into older immutable revisions.
+    """Edit the body of an existing idea version in place. Allowed
+    while the idea is unlocked, the target is the LATEST version, and
+    no reviewer has signed off on this version yet. Once a signoff
+    lands, the next edit has to be a new version via `add_version` so
+    the reviewer's decision stays attached to the bytes they reviewed.
     """
     idea = await get_idea(session, project=project)
     if idea is None or idea.locked_at is not None:
@@ -283,9 +281,11 @@ async def update_version_body(
         raise IdeaVersionNotEditableError(
             "Only the latest version can be edited in place"
         )
-    if await reviewer_count(session, project=project) > 0:
+    existing = await list_signoffs(session, version_id=version.id)
+    if existing:
         raise IdeaVersionNotEditableError(
-            "Reviewers already pulled in — save a new version instead"
+            "Reviewer(s) already signed off on this version — save a new "
+            "version instead"
         )
     version.body_markdown = body_markdown
     await session.flush()
@@ -382,14 +382,26 @@ async def unlock_idea(
 ) -> IdeaModel | None:
     """Clear the idea lock so the owner can keep editing / save a new
     version. Idempotent — calling on an already-unlocked idea no-ops.
-    Does NOT roll the stage back: if the project has already moved past
-    `draft_idea` the caller can drag it back manually if they want to
-    redo the idea from scratch (mirrors `unlock_location`)."""
+
+    Symmetric to `lock_idea`: locking advances `draft_idea →
+    script_drafting`, so unlocking rolls the stage back IFF the project
+    is still on `script_drafting` (i.e. the immediate next stage). If
+    work has progressed further (Casting, Shoot, …) we leave the stage
+    alone — the owner can drag it back manually if they actually want
+    to redo the idea from scratch.
+    """
     idea = await get_idea(session, project=project)
     if idea is None or idea.locked_at is None:
         return idea
     idea.locked_at = None
     idea.locked_by = None
+    if project.stage_key == "script_drafting":
+        await project_service.auto_bump_stage(
+            session,
+            project=project,
+            target_key="draft_idea",
+            actor_id=actor.id,
+        )
     await activity_service.record(
         session,
         project_id=project.id,
