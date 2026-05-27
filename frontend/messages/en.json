@@ -471,6 +471,8 @@
     "verb_location_confirmed": "confirmed a location",
     "verb_location_unconfirmed": "un-confirmed a location",
     "verb_location_deleted": "deleted a location",
+    "verb_location_locked": "locked the location",
+    "verb_location_unlocked": "unlocked the location",
     "verb_location_photo_added": "added a location photo",
     "verb_location_photo_deleted": "deleted a location photo",
     "verb_cast_created": "added a cast member",

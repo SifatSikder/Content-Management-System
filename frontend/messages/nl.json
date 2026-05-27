@@ -471,6 +471,8 @@
     "verb_location_confirmed": "heeft een locatie bevestigd",
     "verb_location_unconfirmed": "heeft een locatie ontbevestigd",
     "verb_location_deleted": "heeft een locatie verwijderd",
+    "verb_location_locked": "heeft de locatie vergrendeld",
+    "verb_location_unlocked": "heeft de locatie ontgrendeld",
     "verb_location_photo_added": "heeft een locatiefoto toegevoegd",
     "verb_location_photo_deleted": "heeft een locatiefoto verwijderd",
     "verb_cast_created": "heeft een castlid toegevoegd",
