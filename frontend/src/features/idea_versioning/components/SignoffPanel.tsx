@@ -24,6 +24,10 @@ interface Props {
   signoffs: IdeaSignoff[];
   currentUserId: string;
   onSignoffAdded?: (s: IdeaSignoff) => void;
+  // Bumped by the parent whenever the idea state may have changed —
+  // e.g. after Request feedback removed an assignee. Without it the
+  // reviewer roster fetch only runs once on mount and goes stale.
+  refreshKey?: number;
 }
 
 function initials(name: string): string {
@@ -47,6 +51,7 @@ export function SignoffPanel({
   signoffs,
   currentUserId,
   onSignoffAdded,
+  refreshKey,
 }: Props) {
   const canSignoff = useCanIDo(project.department_id, "idea_versioning.signoff");
   const [reviewers, setReviewers] = useState<AssignmentPublic[] | null>(null);
@@ -77,7 +82,7 @@ export function SignoffPanel({
     return () => {
       cancelled = true;
     };
-  }, [project.id, project.department_id]);
+  }, [project.id, project.department_id, refreshKey]);
 
   // Latest signoff per reviewer (signoffs come ordered ASC by created_at).
   const latestByReviewer = new Map<string, IdeaSignoff>();

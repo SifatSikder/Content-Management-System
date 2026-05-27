@@ -33,6 +33,12 @@ class IdeaSignoffPublic(BaseModel):
     id: uuid.UUID
     idea_version_id: uuid.UUID
     reviewer_id: uuid.UUID
+    # Snapshot of the reviewer at the time of read — saves the UI from
+    # joining against department memberships (which a global super-admin
+    # may not have rows in). Populated by `get_signoffs`; left null by
+    # endpoints that don't bother joining.
+    reviewer_name: str | None = None
+    reviewer_avatar_url: str | None = None
     decision: SignoffDecision
     comment: str | None
     created_at: datetime

@@ -71,6 +71,10 @@ export interface EnhancementCandidate {
   email: string;
   name: string;
   role_key: string;
+  // Latest signoff this user has ever posted on this project's idea
+  // (across all versions). Used to default-skip already-approved
+  // reviewers from the next email blast.
+  latest_decision: "looks_good" | "needs_changes" | null;
 }
 
 export function listEnhancementCandidates(
@@ -78,6 +82,15 @@ export function listEnhancementCandidates(
 ): Promise<{ items: EnhancementCandidate[] }> {
   return apiFetchAuthed(
     `/projects/${projectId}/idea/enhancement-candidates`,
+  );
+}
+
+export function listIdeaVersionSignoffs(
+  projectId: string,
+  versionId: string,
+): Promise<IdeaSignoff[]> {
+  return apiFetchAuthed<IdeaSignoff[]>(
+    `/projects/${projectId}/idea/versions/${versionId}/signoffs`,
   );
 }
 

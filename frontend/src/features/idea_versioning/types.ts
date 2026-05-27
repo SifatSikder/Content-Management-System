@@ -15,6 +15,10 @@ export interface IdeaSignoff {
   id: string;
   idea_version_id: string;
   reviewer_id: string;
+  // Populated by GET /signoffs (per-version) so the UI doesn't have to
+  // join via dept memberships. Other endpoints may omit them.
+  reviewer_name?: string | null;
+  reviewer_avatar_url?: string | null;
   decision: SignoffDecision;
   comment: string | null;
   created_at: string;

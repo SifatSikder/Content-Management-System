@@ -53,6 +53,10 @@ class IdeaAlreadyLockedError(Exception):
     """Cannot mutate the idea — it's locked."""
 
 
+class IdeaVersionNotSubmittedError(Exception):
+    """Cannot sign off on a version that hasn't been sent for review yet."""
+
+
 class IdeaLockGateError(Exception):
     """Lock denied — not every reviewer has signed off on the latest version."""
 
@@ -156,7 +160,10 @@ async def add_version(
         version_number=version_number,
         body_markdown=body_markdown,
         author_id=author.id,
-        submitted_at=datetime.now(UTC),
+        # submitted_at is intentionally left null — a version becomes
+        # "submitted for review" only when the owner explicitly clicks
+        # Request feedback. Until then it's a draft and reviewers see
+        # neither the body nor any signoff actions for it.
     )
     session.add(version)
     await session.flush()
@@ -195,6 +202,11 @@ async def add_signoff(
     decision: SignoffDecision,
     comment: str | None,
 ) -> IdeaSignoffModel:
+    if version.submitted_at is None:
+        raise IdeaVersionNotSubmittedError(
+            "This version is still a draft — the owner has to send it for "
+            "review before reviewers can sign off"
+        )
     row = IdeaSignoffModel(
         business_id=project.business_id,
         idea_version_id=version.id,
@@ -321,23 +333,34 @@ async def lock_gate_status(
 ) -> tuple[bool, list[uuid.UUID]]:
     """Return `(can_lock, pending_reviewer_ids)`.
 
-    `can_lock = True` iff every active draft_idea reviewer (everyone
-    other than the owner) has a `LOOKS_GOOD` signoff on the latest
-    version. Empty version list → `(False, all_reviewers)`.
+    `can_lock = True` iff:
+      * the latest version has been sent for review (`submitted_at` set), AND
+      * every active draft_idea reviewer's *most recent* signoff across
+        all versions is `LOOKS_GOOD`.
+
+    The cross-version rule matches the "don't re-email approved
+    reviewers" UX: once a director says looks-good, that carries
+    forward to subsequent revisions unless they actively post a new
+    `needs_changes`. Otherwise the lock gate would be impossible to
+    satisfy after any in-place revise.
     """
     version = await latest_version(session, project=project)
-    if version is None:
-        return False, await _active_reviewer_ids(session, project=project)
     reviewers = await _active_reviewer_ids(session, project=project)
+    if version is None or version.submitted_at is None:
+        # No version, or current version is still a draft — can't lock
+        # until the owner explicitly sends it for review.
+        return False, reviewers
     if not reviewers:
-        # No reviewers configured — anyone can lock. Edge case for misconfigured
-        # departments; the route layer can still gate via permissions.
+        # No reviewers configured — anyone with the permission can
+        # lock. Edge case for misconfigured departments.
         return True, []
-    latest = await _latest_signoff_per_reviewer(session, version_id=version.id)
+    latest_by_user = await latest_signoff_decision_by_user(
+        session, project=project
+    )
     pending: list[uuid.UUID] = []
     for reviewer_id in reviewers:
-        signoff = latest.get(reviewer_id)
-        if signoff is None or signoff.decision != SignoffDecision.LOOKS_GOOD:
+        decision = latest_by_user.get(reviewer_id)
+        if decision != SignoffDecision.LOOKS_GOOD:
             pending.append(reviewer_id)
     return (len(pending) == 0), pending
 
@@ -445,6 +468,29 @@ async def list_enhancement_candidates(
     return [(r.user_id, r.email, r.name, r.key) for r in rows.all()]
 
 
+async def latest_signoff_decision_by_user(
+    session: AsyncSession, *, project: ProjectModel
+) -> dict[uuid.UUID, SignoffDecision]:
+    """For each reviewer who has ever signed off on any version of this
+    project's idea, return their most-recent decision (across versions).
+    Used by the Request Feedback dialog to skip re-pinging people who
+    already approved.
+    """
+    rows = await session.execute(
+        select(IdeaSignoffModel)
+        .join(IdeaVersionModel, IdeaVersionModel.id == IdeaSignoffModel.idea_version_id)
+        .join(IdeaModel, IdeaModel.id == IdeaVersionModel.idea_id)
+        .where(IdeaModel.project_id == project.id)
+        .order_by(IdeaSignoffModel.created_at.desc())
+    )
+    latest: dict[uuid.UUID, SignoffDecision] = {}
+    for row in rows.scalars():
+        if row.reviewer_id in latest:
+            continue
+        latest[row.reviewer_id] = row.decision
+    return latest
+
+
 async def request_enhancement(
     session: AsyncSession,
     *,
@@ -460,7 +506,8 @@ async def request_enhancement(
     (assignment_service.add is upsert-shaped). Email failures are
     swallowed — logged but don't roll back the assignments.
     """
-    if await latest_version(session, project=project) is None:
+    latest = await latest_version(session, project=project)
+    if latest is None:
         raise IdeaNotFoundError(
             "Save at least one draft version before requesting enhancement"
         )
@@ -468,6 +515,11 @@ async def request_enhancement(
         raise NoEnhancementReviewersError(
             "Pick at least one reviewer before requesting feedback"
         )
+    # Stamp the version as "submitted for review" the first time the
+    # owner sends it out. Re-sending later doesn't reset the timestamp
+    # — first submission wins so the audit log stays meaningful.
+    if latest.submitted_at is None:
+        latest.submitted_at = datetime.now(UTC)
 
     candidates = await list_enhancement_candidates(session, project=project)
     by_id = {row[0]: row for row in candidates}
@@ -479,6 +531,25 @@ async def request_enhancement(
     reviewers = [
         (uid, by_id[uid][1], by_id[uid][2]) for uid in reviewer_user_ids
     ]
+
+    # "Request feedback" is the authoritative reviewer list for the
+    # current request — anyone the owner unticked gets pulled off the
+    # stage assignment so the SignoffPanel + lock gate only consider
+    # the people actually being asked to review this round. Their
+    # historical signoffs stay in the DB for the carry-over rule.
+    requested_ids = set(reviewer_user_ids)
+    current_ids = set(await _active_reviewer_ids(session, project=project))
+    for stale_id in current_ids - requested_ids:
+        try:
+            await assignment_service.remove(
+                session,
+                project=project,
+                stage_key="draft_idea",
+                user_id=stale_id,
+            )
+        except assignment_service.AssignmentNotFoundError:
+            # Race or concurrent removal — nothing to do.
+            pass
 
     newly_assigned: list[uuid.UUID] = []
     for user_id, _email, _name in reviewers:
@@ -541,6 +612,7 @@ __all__ = [
     "IdeaNotFoundError",
     "IdeaVersionNotEditableError",
     "IdeaVersionNotFoundError",
+    "IdeaVersionNotSubmittedError",
     "NoEnhancementReviewersError",
     "add_signoff",
     "add_version",
@@ -550,6 +622,7 @@ __all__ = [
     "list_signoffs",
     "list_versions",
     "list_enhancement_candidates",
+    "latest_signoff_decision_by_user",
     "lock_gate_status",
     "lock_idea",
     "request_enhancement",

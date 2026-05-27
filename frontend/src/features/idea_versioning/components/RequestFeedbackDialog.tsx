@@ -1,6 +1,6 @@
 "use client";
 
-import { Send } from "lucide-react";
+import { CheckCircle2, MessageCircleMore, Send } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -14,6 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
@@ -63,9 +64,17 @@ export function RequestFeedbackDialog({
         const res = await listEnhancementCandidates(project.id);
         if (cancelled) return;
         setCandidates(res.items);
-        // Pre-select everyone by default — easiest case is "notify all"
-        // and the user can untick the ones they don't want.
-        setSelected(new Set(res.items.map((c) => c.user_id)));
+        // Default checked: everyone EXCEPT reviewers whose latest
+        // signoff on this idea is already `looks_good`. They've
+        // approved, so don't re-spam them — the owner can still tick
+        // them manually if she actually wants to re-notify.
+        setSelected(
+          new Set(
+            res.items
+              .filter((c) => c.latest_decision !== "looks_good")
+              .map((c) => c.user_id),
+          ),
+        );
       } catch {
         if (cancelled) return;
         setCandidates([]);
@@ -137,17 +146,40 @@ export function RequestFeedbackDialog({
                 return (
                   <li
                     key={c.user_id}
-                    className="hover:bg-muted flex items-center gap-3 p-3"
+                    className="hover:bg-muted flex min-w-0 items-center gap-3 p-3"
                   >
                     <Checkbox
                       id={id}
                       checked={checked}
                       onCheckedChange={() => toggle(c.user_id)}
                       disabled={submitting}
+                      className="shrink-0"
                     />
-                    <Label htmlFor={id} className="min-w-0 flex-1 cursor-pointer">
-                      <div className="truncate text-sm font-medium">
-                        {c.name}
+                    <Label
+                      htmlFor={id}
+                      className="flex min-w-0 flex-1 cursor-pointer flex-col"
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="truncate text-sm font-medium">
+                          {c.name}
+                        </span>
+                        {c.latest_decision === "looks_good" ? (
+                          <Badge
+                            variant="default"
+                            className="shrink-0 gap-1 text-[10px]"
+                          >
+                            <CheckCircle2 className="size-3" />
+                            Approved
+                          </Badge>
+                        ) : c.latest_decision === "needs_changes" ? (
+                          <Badge
+                            variant="destructive"
+                            className="shrink-0 gap-1 text-[10px]"
+                          >
+                            <MessageCircleMore className="size-3" />
+                            Asked for changes
+                          </Badge>
+                        ) : null}
                       </div>
                       <div className="text-muted-foreground truncate text-xs">
                         {c.email} · {roleLabel(c.role_key)}

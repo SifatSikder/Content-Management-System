@@ -10,6 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   createIdeaVersion,
   getIdeaSummary,
   listIdeaVersions,
@@ -19,6 +25,7 @@ import {
 } from "@/features/idea_versioning/api";
 import { RequestFeedbackDialog } from "@/features/idea_versioning/components/RequestFeedbackDialog";
 import { SignoffPanel } from "@/features/idea_versioning/components/SignoffPanel";
+import { VersionHistoryItem } from "@/features/idea_versioning/components/VersionHistoryItem";
 import type {
   IdeaSummary,
   IdeaVersion,
@@ -51,12 +58,19 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
   // draft. Otherwise the page always looks "editing" and the saved
   // state is invisible.
   const [editingInPlace, setEditingInPlace] = useState(false);
+  // Bumped after every successful load() so child fetches (e.g.
+  // SignoffPanel's reviewer roster) refresh when assignments change.
+  const [reloadCounter, setReloadCounter] = useState(0);
 
   const canEdit =
     useCanIDo(project.department_id, "project.edit") && canInput;
-  const canLock =
+  const hasLockPerm =
     useCanIDo(project.department_id, "idea_versioning.lock") && canInput;
   const isOwner = currentUserId !== "" && currentUserId === project.owner_id;
+  // Lock + Unlock are owner-only actions — even if CEO/Director hold the
+  // permission, they shouldn't be deciding when the Asst CEO's draft is
+  // done. Mirrors the Lock Location gate.
+  const canLock = isOwner && hasLockPerm;
 
   async function load() {
     try {
@@ -66,6 +80,7 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
       ]);
       setSummary(s);
       setVersions(vs);
+      setReloadCounter((c) => c + 1);
     } catch {
       toast.error("Failed to load idea");
     }
@@ -230,18 +245,33 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
             ) : null}
           </>
         ) : canLock ? (
-          <Button
-            onClick={handleLock}
-            disabled={busy || !summary.can_lock}
-            title={
-              summary.can_lock
-                ? "Lock the idea and advance to Script drafting"
-                : `${summary.pending_reviewer_ids.length} reviewer(s) still need to approve`
-            }
-          >
-            <Lock className="size-4" />
-            Lock idea
-          </Button>
+          <TooltipProvider delayDuration={150}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {/* span wrapper — pointer events on disabled buttons
+                    don't fire in most browsers, which kills the tooltip
+                    on exactly the case we need to explain. */}
+                <span className={summary.can_lock ? undefined : "cursor-not-allowed"}>
+                  <Button
+                    onClick={handleLock}
+                    disabled={busy || !summary.can_lock}
+                    className={summary.can_lock ? undefined : "pointer-events-none"}
+                  >
+                    <Lock className="size-4" />
+                    Lock idea
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {summary.can_lock
+                  ? "Lock the idea and advance to Script drafting"
+                  : summary.latest_version &&
+                      summary.latest_version.submitted_at === null
+                    ? "Send this version for review first (Request feedback)"
+                    : `${summary.pending_reviewer_ids.length} reviewer(s) still need to approve`}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         ) : null}
       </div>
 
@@ -308,13 +338,22 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
               </pre>
             )}
             {!canEditInPlace ? (
-              <SignoffPanel
-                project={project}
-                versionId={latest.id}
-                signoffs={summary.latest_version_signoffs}
-                currentUserId={currentUserId}
-                onSignoffAdded={() => void load()}
-              />
+              latest.submitted_at !== null ? (
+                <SignoffPanel
+                  project={project}
+                  versionId={latest.id}
+                  signoffs={summary.latest_version_signoffs}
+                  currentUserId={currentUserId}
+                  onSignoffAdded={() => void load()}
+                  refreshKey={reloadCounter}
+                />
+              ) : (
+                <p className="text-muted-foreground rounded-md border border-dashed p-3 text-sm">
+                  {isOwner
+                    ? "This version is a draft. Click Request feedback when you're ready to send it for review."
+                    : "The owner is preparing this version. You'll be notified by email when it's ready for review."}
+                </p>
+              )
             ) : null}
           </CardContent>
         </Card>
@@ -379,23 +418,22 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
         </p>
       ) : null}
 
-      {versions.length > 1 ? (
+      {versions.length > 1 && isOwner ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-sm">Version history</CardTitle>
           </CardHeader>
           <CardContent>
-            <ul className="space-y-1 text-xs">
+            <ul className="space-y-1">
               {versions
                 .slice()
                 .sort((a, b) => b.version_number - a.version_number)
                 .map((v) => (
-                  <li key={v.id} className="flex items-center justify-between">
-                    <span>V{v.version_number}</span>
-                    <span className="text-muted-foreground">
-                      {formatDate(v.created_at)}
-                    </span>
-                  </li>
+                  <VersionHistoryItem
+                    key={v.id}
+                    projectId={project.id}
+                    version={v}
+                  />
                 ))}
             </ul>
           </CardContent>

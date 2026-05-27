@@ -8,6 +8,7 @@ from typing import Annotated
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 from app.auth.dependencies import (
     CurrentUser,
@@ -17,6 +18,7 @@ from app.auth.dependencies import (
     require_project_access,
 )
 from app.models.project import ProjectModel
+from app.models.user import UserModel
 from app.schemas.idea import (
     CreateIdeaSignoffBody,
     CreateIdeaVersionBody,
@@ -32,6 +34,7 @@ from app.services.idea_service import (
     IdeaNotFoundError,
     IdeaVersionNotEditableError,
     IdeaVersionNotFoundError,
+    IdeaVersionNotSubmittedError,
     NoEnhancementReviewersError,
 )
 
@@ -167,6 +170,63 @@ async def patch_version(
 # ---------- signoffs ----------
 
 
+@router.get(
+    "/versions/{version_id}/signoffs",
+    response_model=list[IdeaSignoffPublic],
+    summary="List signoffs for one specific idea version",
+)
+async def get_signoffs(
+    version_id: uuid.UUID,
+    project: Annotated[
+        ProjectModel, Depends(require_project_access(ProjectAccess.VIEW))
+    ],
+    session: SessionDep,
+) -> list[IdeaSignoffPublic]:
+    # Verify the version actually belongs to this project's idea so a
+    # random version_id from another project can't be probed inside the
+    # same business.
+    try:
+        version = await idea_service.get_version(session, version_id=version_id)
+    except IdeaVersionNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Idea version not found") from exc
+    idea = await idea_service.get_idea(session, project=project)
+    if idea is None or version.idea_id != idea.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Idea version not found")
+    rows = await idea_service.list_signoffs(session, version_id=version_id)
+    # Resolve reviewer display info in one go — the version history UI
+    # would otherwise have to fall back on department memberships, and
+    # super-admins (CEO) may sign off without ever having a membership
+    # row in this department.
+    reviewer_ids = {r.reviewer_id for r in rows}
+    name_by_id: dict[uuid.UUID, tuple[str, str | None]] = {}
+    if reviewer_ids:
+        user_rows = await session.execute(
+            select(UserModel.id, UserModel.name, UserModel.avatar_url).where(
+                UserModel.id.in_(reviewer_ids)
+            )
+        )
+        for uid, name, avatar in user_rows.all():
+            name_by_id[uid] = (name, avatar)
+    out: list[IdeaSignoffPublic] = []
+    for r in rows:
+        info = name_by_id.get(r.reviewer_id)
+        out.append(
+            IdeaSignoffPublic.model_validate(
+                {
+                    "id": r.id,
+                    "idea_version_id": r.idea_version_id,
+                    "reviewer_id": r.reviewer_id,
+                    "reviewer_name": info[0] if info else None,
+                    "reviewer_avatar_url": info[1] if info else None,
+                    "decision": r.decision,
+                    "comment": r.comment,
+                    "created_at": r.created_at,
+                }
+            )
+        )
+    return out
+
+
 @router.post(
     "/versions/{version_id}/signoffs",
     response_model=IdeaSignoffPublic,
@@ -189,14 +249,17 @@ async def post_signoff(
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, "Idea version not found"
         ) from exc
-    row = await idea_service.add_signoff(
-        session,
-        project=project,
-        version=version,
-        reviewer=user,
-        decision=body.decision,
-        comment=body.comment,
-    )
+    try:
+        row = await idea_service.add_signoff(
+            session,
+            project=project,
+            version=version,
+            reviewer=user,
+            decision=body.decision,
+            comment=body.comment,
+        )
+    except IdeaVersionNotSubmittedError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     await session.commit()
     await session.refresh(row)
     return IdeaSignoffPublic.model_validate(row)
@@ -214,8 +277,11 @@ async def get_enhancement_candidates(
         ProjectModel, Depends(require_project_access(ProjectAccess.VIEW))
     ],
     session: SessionDep,
-) -> dict[str, list[dict[str, str]]]:
+) -> dict[str, list[dict[str, str | None]]]:
     rows = await idea_service.list_enhancement_candidates(
+        session, project=project
+    )
+    latest = await idea_service.latest_signoff_decision_by_user(
         session, project=project
     )
     return {
@@ -225,6 +291,9 @@ async def get_enhancement_candidates(
                 "email": email,
                 "name": name,
                 "role_key": role_key,
+                "latest_decision": (
+                    latest[uid].value if uid in latest else None
+                ),
             }
             for uid, email, name, role_key in rows
         ],
