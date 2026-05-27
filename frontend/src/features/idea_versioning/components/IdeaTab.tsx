@@ -1,6 +1,6 @@
 "use client";
 
-import { Lock, Save, Send } from "lucide-react";
+import { Lock, LockOpen, Save, Send } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -14,6 +14,7 @@ import {
   getIdeaSummary,
   listIdeaVersions,
   lockIdea,
+  unlockIdea,
   updateIdeaVersion,
 } from "@/features/idea_versioning/api";
 import { RequestFeedbackDialog } from "@/features/idea_versioning/components/RequestFeedbackDialog";
@@ -155,6 +156,21 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
     }
   }
 
+  async function handleUnlock() {
+    setBusy(true);
+    try {
+      const next = await unlockIdea(project.id);
+      setSummary(next);
+      toast.success("Idea unlocked — you can edit or save a new version");
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Failed to unlock idea",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (summary === null || versions === null) {
     return <p className="text-muted-foreground text-sm">Loading…</p>;
   }
@@ -177,10 +193,23 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
           </Button>
         ) : null}
         {locked ? (
-          <Badge variant="secondary" className="gap-1">
-            <Lock className="size-3" />
-            Idea locked
-          </Badge>
+          <>
+            <Badge variant="secondary" className="gap-1">
+              <Lock className="size-3" />
+              Idea locked
+            </Badge>
+            {isOwner ? (
+              <Button
+                variant="outline"
+                onClick={handleUnlock}
+                disabled={busy}
+                title="Reopen the idea so you can edit it or save a new version"
+              >
+                <LockOpen className="size-4" />
+                Unlock idea
+              </Button>
+            ) : null}
+          </>
         ) : canLock ? (
           <Button
             onClick={handleLock}

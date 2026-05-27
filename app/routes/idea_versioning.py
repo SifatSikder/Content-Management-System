@@ -293,4 +293,28 @@ async def post_lock(
     return await get_summary(project, session)
 
 
+@router.post(
+    "/unlock",
+    response_model=IdeaSummaryPublic,
+    summary="Clear the idea lock so the owner can edit / re-version",
+    dependencies=[Depends(require_action("idea_versioning.lock"))],
+)
+async def post_unlock(
+    project: Annotated[
+        ProjectModel, Depends(require_project_access(ProjectAccess.VIEW))
+    ],
+    user: CurrentUser,
+    session: SessionDep,
+) -> IdeaSummaryPublic:
+    # Owner-only — mirrors the location unlock semantics. The Asst CEO
+    # owns the draft and is the only one who should be able to reopen it.
+    if project.owner_id != user.id and not user.is_super_admin:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Only the project owner can unlock the idea"
+        )
+    await idea_service.unlock_idea(session, project=project, actor=user)
+    await session.commit()
+    return await get_summary(project, session)
+
+
 __all__ = ["router"]

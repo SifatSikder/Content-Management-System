@@ -377,6 +377,28 @@ async def lock_idea(
     return idea
 
 
+async def unlock_idea(
+    session: AsyncSession, *, project: ProjectModel, actor: UserModel
+) -> IdeaModel | None:
+    """Clear the idea lock so the owner can keep editing / save a new
+    version. Idempotent — calling on an already-unlocked idea no-ops.
+    Does NOT roll the stage back: if the project has already moved past
+    `draft_idea` the caller can drag it back manually if they want to
+    redo the idea from scratch (mirrors `unlock_location`)."""
+    idea = await get_idea(session, project=project)
+    if idea is None or idea.locked_at is None:
+        return idea
+    idea.locked_at = None
+    idea.locked_by = None
+    await activity_service.record(
+        session,
+        project_id=project.id,
+        actor_id=actor.id,
+        action="idea.unlocked",
+    )
+    return idea
+
+
 # Role keys whose holders get pulled in for idea-enhancement feedback.
 # Mirrors the spec — Asst CEO drafts, CEO + Director give feedback.
 _ENHANCEMENT_REVIEWER_ROLE_KEYS = ("ceo", "director", "junior_director")
@@ -520,5 +542,6 @@ __all__ = [
     "lock_idea",
     "request_enhancement",
     "reviewer_count",
+    "unlock_idea",
     "update_version_body",
 ]

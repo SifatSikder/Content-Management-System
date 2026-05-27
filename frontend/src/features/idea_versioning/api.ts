@@ -60,6 +60,12 @@ export function lockIdea(projectId: string): Promise<IdeaSummary> {
   });
 }
 
+export function unlockIdea(projectId: string): Promise<IdeaSummary> {
+  return apiFetchAuthed<IdeaSummary>(`/projects/${projectId}/idea/unlock`, {
+    method: "POST",
+  });
+}
+
 export interface EnhancementCandidate {
   user_id: string;
   email: string;
