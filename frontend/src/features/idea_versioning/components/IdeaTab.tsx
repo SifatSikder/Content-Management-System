@@ -1,6 +1,6 @@
 "use client";
 
-import { Lock, LockOpen, Save, Send } from "lucide-react";
+import { Lock, LockOpen, Pencil, Save, Send, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -46,6 +46,11 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
+  // Explicit edit-toggle so the default view of the current version is
+  // read-only — the textarea only appears once the owner clicks Edit
+  // draft. Otherwise the page always looks "editing" and the saved
+  // state is invisible.
+  const [editingInPlace, setEditingInPlace] = useState(false);
 
   const canEdit =
     useCanIDo(project.department_id, "project.edit") && canInput;
@@ -82,20 +87,26 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
     summary.latest_version !== null &&
     summary.reviewer_count === 0;
 
-  // Pre-fill the draft from the current version whenever we (re)enter
-  // edit-in-place mode for a different version. Tracked by version_id
-  // so saving in place + reloading doesn't wipe what the user just
-  // typed (the body comes back unchanged).
-  const [lastLoadedVersionId, setLastLoadedVersionId] = useState<string | null>(
-    null,
-  );
+  // Edit-in-place is no longer the default view; opening it requires an
+  // explicit click. The moment that mode is no longer available (idea
+  // locked, reviewers pulled in, ownership change), drop out of it so
+  // the read-only view shows again.
   useEffect(() => {
-    if (!canEditInPlace || !summary?.latest_version) return;
-    if (summary.latest_version.id !== lastLoadedVersionId) {
-      setDraft(summary.latest_version.body_markdown);
-      setLastLoadedVersionId(summary.latest_version.id);
+    if (!canEditInPlace && editingInPlace) {
+      setEditingInPlace(false);
     }
-  }, [canEditInPlace, summary, lastLoadedVersionId]);
+  }, [canEditInPlace, editingInPlace]);
+
+  function startEditInPlace() {
+    if (!summary?.latest_version) return;
+    setDraft(summary.latest_version.body_markdown);
+    setEditingInPlace(true);
+  }
+
+  function cancelEditInPlace() {
+    setEditingInPlace(false);
+    setDraft("");
+  }
 
   async function handleSaveVersion() {
     const body = draft.trim();
@@ -129,6 +140,8 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
     try {
       await updateIdeaVersion(project.id, summary.latest_version.id, body);
       toast.success("Draft saved");
+      setEditingInPlace(false);
+      setDraft("");
       await load();
     } catch (err) {
       toast.error(
@@ -226,15 +239,109 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
         ) : null}
       </div>
 
-      {!locked && canEdit ? (
+      {latest ? (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">
+              {editingInPlace
+                ? `Editing V${latest.version_number}`
+                : `Current version (V${latest.version_number})`}
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground text-xs">
+                {formatDate(latest.created_at)}
+              </span>
+              {canEditInPlace && !editingInPlace ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={startEditInPlace}
+                  disabled={busy}
+                  title="Edit the current version in place — no new version is created until you request feedback"
+                >
+                  <Pencil className="size-3" />
+                  Edit draft
+                </Button>
+              ) : null}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {editingInPlace ? (
+              <>
+                <Textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  rows={8}
+                  placeholder="Edit your draft in place. Saving overwrites the current version until you request feedback."
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={handleSaveInPlace}
+                    disabled={
+                      busy ||
+                      !draft.trim() ||
+                      draft === latest.body_markdown
+                    }
+                  >
+                    <Save className="size-4" />
+                    Save changes
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={cancelEditInPlace}
+                    disabled={busy}
+                  >
+                    <X className="size-4" />
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <pre className="bg-muted/40 max-h-72 overflow-auto rounded-md p-3 text-sm whitespace-pre-wrap">
+                {latest.body_markdown}
+              </pre>
+            )}
+            {!canEditInPlace ? (
+              <SignoffPanel
+                project={project}
+                versionId={latest.id}
+                signoffs={summary.latest_version_signoffs}
+                currentUserId={currentUserId}
+                onSignoffAdded={() => void load()}
+              />
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {!locked && canEdit && !latest ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Draft idea V1</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={8}
+              placeholder="Sketch the first version of the idea here. Markdown is fine."
+            />
+            <Button
+              onClick={handleSaveVersion}
+              disabled={busy || !draft.trim()}
+            >
+              <Save className="size-4" />
+              Save as V1
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {!locked && canEdit && latest && !canEditInPlace ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              {!latest
-                ? "Draft idea V1"
-                : canEditInPlace
-                  ? `Draft idea V${latest.version_number} (editing)`
-                  : `Draft idea V${latest.version_number + 1}`}
+              Draft idea V{latest.version_number + 1}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -242,55 +349,20 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               rows={8}
-              placeholder={
-                !latest
-                  ? "Sketch the first version of the idea here. Markdown is fine."
-                  : canEditInPlace
-                    ? "Edit your draft in place. Saving will overwrite the current version until you request feedback."
-                    : "Revise based on the feedback above and save a new version…"
-              }
+              placeholder="Revise based on the feedback above and save a new version…"
             />
             <Button
-              onClick={
-                canEditInPlace ? handleSaveInPlace : handleSaveVersion
-              }
+              onClick={handleSaveVersion}
               disabled={busy || !draft.trim()}
             >
               <Save className="size-4" />
-              {!latest
-                ? "Save as V1"
-                : canEditInPlace
-                  ? "Save changes"
-                  : `Save as V${latest.version_number + 1}`}
+              Save as V{latest.version_number + 1}
             </Button>
           </CardContent>
         </Card>
       ) : null}
 
-      {latest && !canEditInPlace ? (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">
-              Current version (V{latest.version_number})
-            </CardTitle>
-            <span className="text-muted-foreground text-xs">
-              {formatDate(latest.created_at)}
-            </span>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <pre className="bg-muted/40 max-h-72 overflow-auto rounded-md p-3 text-sm whitespace-pre-wrap">
-              {latest.body_markdown}
-            </pre>
-            <SignoffPanel
-              project={project}
-              versionId={latest.id}
-              signoffs={summary.latest_version_signoffs}
-              currentUserId={currentUserId}
-              onSignoffAdded={() => void load()}
-            />
-          </CardContent>
-        </Card>
-      ) : !latest ? (
+      {!latest ? (
         <p className="text-muted-foreground text-sm">
           No idea version yet. Save the first draft above to kick off the
           review loop.
