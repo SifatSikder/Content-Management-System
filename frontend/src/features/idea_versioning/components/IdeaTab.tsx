@@ -1,6 +1,6 @@
 "use client";
 
-import { Lock, Save } from "lucide-react";
+import { Lock, Save, Send } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -14,6 +14,7 @@ import {
   getIdeaSummary,
   listIdeaVersions,
   lockIdea,
+  requestIdeaEnhancement,
 } from "@/features/idea_versioning/api";
 import { SignoffPanel } from "@/features/idea_versioning/components/SignoffPanel";
 import type {
@@ -26,6 +27,7 @@ import { ApiError } from "@/lib/api-client";
 
 interface Props {
   project: Project;
+  canInput?: boolean;
   onProjectUpdated?: (next: Project) => void;
 }
 
@@ -33,7 +35,7 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 
-export function IdeaTab({ project, onProjectUpdated }: Props) {
+export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
   const { data: session } = useSession();
   const currentUserId = (session?.user as { id?: string } | undefined)?.id ?? "";
 
@@ -42,8 +44,11 @@ export function IdeaTab({ project, onProjectUpdated }: Props) {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const canEdit = useCanIDo(project.department_id, "project.edit");
-  const canLock = useCanIDo(project.department_id, "idea_versioning.lock");
+  const canEdit =
+    useCanIDo(project.department_id, "project.edit") && canInput;
+  const canLock =
+    useCanIDo(project.department_id, "idea_versioning.lock") && canInput;
+  const isOwner = currentUserId !== "" && currentUserId === project.owner_id;
 
   async function load() {
     try {
@@ -84,6 +89,26 @@ export function IdeaTab({ project, onProjectUpdated }: Props) {
     }
   }
 
+  async function handleRequestEnhancement() {
+    setBusy(true);
+    try {
+      const res = await requestIdeaEnhancement(project.id);
+      const n = res.newly_assigned_user_ids.length;
+      toast.success(
+        n > 0
+          ? `Feedback requested — ${n} reviewer(s) notified by email`
+          : "All reviewers were already assigned",
+      );
+      await load();
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Failed to request feedback",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleLock() {
     setBusy(true);
     try {
@@ -111,6 +136,17 @@ export function IdeaTab({ project, onProjectUpdated }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end gap-2">
+        {!locked && isOwner && latest ? (
+          <Button
+            variant="outline"
+            onClick={handleRequestEnhancement}
+            disabled={busy}
+            title="Pull CEO + Director onto this card and email them"
+          >
+            <Send className="size-4" />
+            Request feedback
+          </Button>
+        ) : null}
         {locked ? (
           <Badge variant="secondary" className="gap-1">
             <Lock className="size-3" />

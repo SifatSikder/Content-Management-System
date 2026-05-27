@@ -62,12 +62,14 @@ export function FilterBar({
 
   return (
     <div className="flex flex-wrap items-center gap-3 border-b px-4 py-3 md:px-6">
-      <div className="flex items-center gap-2">
-        <Switch id="mine-only" checked={mine} onCheckedChange={setMine} />
-        <Label htmlFor="mine-only" className="text-sm">
-          {tProj("filter_mine")}
-        </Label>
-      </div>
+      {canCreate && (
+        <div className="flex items-center gap-2">
+          <Switch id="mine-only" checked={mine} onCheckedChange={setMine} />
+          <Label htmlFor="mine-only" className="text-sm">
+            {tProj("filter_mine")}
+          </Label>
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
         <Label className="text-muted-foreground text-sm">{tProj("filter_stage")}</Label>

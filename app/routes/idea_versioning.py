@@ -29,6 +29,7 @@ from app.services.idea_service import (
     IdeaLockGateError,
     IdeaNotFoundError,
     IdeaVersionNotFoundError,
+    NoEnhancementReviewersError,
 )
 
 log = structlog.get_logger(__name__)
@@ -148,6 +149,43 @@ async def post_signoff(
     await session.commit()
     await session.refresh(row)
     return IdeaSignoffPublic.model_validate(row)
+
+
+# ---------- request enhancement ----------
+
+
+@router.post(
+    "/request-enhancement",
+    summary="Pull CEO + Director onto the draft_idea card and email them",
+)
+async def post_request_enhancement(
+    project: Annotated[
+        ProjectModel, Depends(require_project_access(ProjectAccess.EDIT))
+    ],
+    user: CurrentUser,
+    session: SessionDep,
+) -> dict[str, object]:
+    # Only the project owner can request feedback. The role-based
+    # `project.create` permission isn't enough — multiple Asst CEOs in
+    # the same dept shouldn't be able to ping reviewers on each other's
+    # projects.
+    if project.owner_id != user.id and not user.is_super_admin:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Only the project owner can request feedback"
+        )
+    try:
+        newly_assigned = await idea_service.request_enhancement(
+            session, project=project, actor=user
+        )
+    except IdeaNotFoundError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    except NoEnhancementReviewersError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await session.commit()
+    return {
+        "status": "requested",
+        "newly_assigned_user_ids": [str(u) for u in newly_assigned],
+    }
 
 
 # ---------- lock ----------

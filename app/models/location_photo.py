@@ -19,6 +19,12 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 class LocationPhotoModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "location_photos"
 
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("businesses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     location_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("locations.id", ondelete="CASCADE"),

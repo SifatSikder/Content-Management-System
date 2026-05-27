@@ -78,7 +78,6 @@ export interface AssignmentPublic {
   stage_key: string;
   user_id: string;
   user: OwnerPublic;
-  slot_key: string | null;
   assigned_at: string;
   assigned_by: string | null;
 }

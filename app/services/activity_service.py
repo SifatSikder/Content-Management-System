@@ -18,6 +18,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.activity import ActivityModel
+from app.models.project import ProjectModel
 
 log = structlog.get_logger(__name__)
 
@@ -57,8 +58,21 @@ async def record(
     Caller commits. `action` is a verb-style key (`project.created`,
     `project.stage_changed`, `script.locked`, …). `metadata` is freeform
     JSONB — keep keys short and stable, no PII.
+
+    When a `project_id` is supplied, we derive the activity row's
+    `business_id` from the project so the row satisfies the shared
+    `tenant_isolation` RLS policy on `activities` for non-super-admin
+    writers. Project-less activities are CEO-only by construction.
     """
+    business_id: uuid.UUID | None = None
+    if project_id is not None:
+        row = await session.execute(
+            select(ProjectModel.business_id).where(ProjectModel.id == project_id)
+        )
+        business_id = row.scalar_one_or_none()
+
     entry = ActivityModel(
+        business_id=business_id,
         project_id=project_id,
         actor_id=actor_id,
         action=action,

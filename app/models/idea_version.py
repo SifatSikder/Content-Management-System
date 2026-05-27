@@ -14,7 +14,6 @@ from datetime import datetime
 
 from sqlalchemy import (
     DateTime,
-    Enum,
     ForeignKey,
     Integer,
     Text,
@@ -24,6 +23,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.enums import pg_enum
 
 
 class IdeaModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -122,7 +122,10 @@ class IdeaSignoffModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         index=True,
     )
     decision: Mapped[SignoffDecision] = mapped_column(
-        Enum(SignoffDecision, name="idea_signoff_decision"),
+        # Use the project's `pg_enum` helper so SQLAlchemy stores the
+        # lowercase `.value` (`looks_good` / `needs_changes`) the
+        # Postgres enum type expects, not the upper-case `.name`.
+        pg_enum(SignoffDecision, name="idea_signoff_decision"),
         nullable=False,
     )
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)

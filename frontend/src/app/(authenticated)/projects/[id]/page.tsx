@@ -10,8 +10,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ActivityFeed } from "@/features/activity/components/ActivityFeed";
 import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useTerminology } from "@/features/departments/hooks/useTerminology";
+import { usePermissions } from "@/features/permissions/hooks/usePermissions";
 import { BriefTab } from "@/features/projects/components/BriefTab";
-import { tabsForTemplate } from "@/features/projects/lib/projectTabs";
+import { useCanInputOnProject } from "@/features/projects/hooks/useCanInputOnProject";
+import {
+  defaultTabForStage,
+  tabsForTemplate,
+  type TabEntry,
+} from "@/features/projects/lib/projectTabs";
 import {
   getStage,
   localizedStageLabel,
@@ -53,6 +59,12 @@ export default function ProjectDetailPage() {
 
   const [project, setProject] = useState<Project | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "not_found" | "error">("loading");
+  // Active tab is controlled so we can swap it from "brief" to the
+  // stage-relevant tab *after* the permission map loads. Otherwise the
+  // initial Tabs render filters with empty perms, every tab is hidden,
+  // defaultValue falls back to "brief", and the user lands there.
+  const [activeTab, setActiveTab] = useState<string>("brief");
+  const [tabAutoSelected, setTabAutoSelected] = useState(false);
 
   const reload = useCallback(async () => {
     if (!projectId) return;
@@ -75,6 +87,43 @@ export default function ProjectDetailPage() {
   // the conditional early returns. `useTerminology` tolerates `undefined`
   // and just returns a noun-fallback identity while the project loads.
   const noun = useTerminology(project?.department.terminology);
+  const perms = usePermissions(project?.department_id);
+  const canInput = useCanInputOnProject(project);
+
+  // Once both the project and the permission map are loaded, jump to
+  // the stage-relevant tab (e.g. `draft_idea` → Idea, `editing` → Edits)
+  // — but only on the *first* successful load. After the user has
+  // clicked any tab manually, we leave their choice alone.
+  useEffect(() => {
+    if (tabAutoSelected) return;
+    if (!project || !perms.data) return;
+    const stageTab = defaultTabForStage(
+      project.department.template_key,
+      project.stage_key,
+    );
+    if (!stageTab) {
+      setTabAutoSelected(true);
+      return;
+    }
+    const visibleTabs = tabsForTemplate(
+      project.department.template_key,
+    ).filter((t) => {
+      if (!t.requiredAnyOf || t.requiredAnyOf.length === 0) return true;
+      if (perms.data!.is_super_admin) return true;
+      return t.requiredAnyOf.some((k) => perms.data!.allowed[k] === true);
+    });
+    if (visibleTabs.some((t) => t.key === stageTab)) {
+      setActiveTab(stageTab);
+    }
+    setTabAutoSelected(true);
+  }, [project, perms.data, tabAutoSelected]);
+
+  function tabIsVisible(tab: TabEntry): boolean {
+    if (!tab.requiredAnyOf || tab.requiredAnyOf.length === 0) return true;
+    if (!perms.data) return false;
+    if (perms.data.is_super_admin) return true;
+    return tab.requiredAnyOf.some((k) => perms.data!.allowed[k] === true);
+  }
 
   if (!auth.user) return null;
 
@@ -99,8 +148,11 @@ export default function ProjectDetailPage() {
   const isOwner = project.owner_id === auth.user.id;
   const stageSpec = getStage(project.department.template_key, project.stage_key);
   const stageLabel = localizedStageLabel(stageSpec, locale, project.stage_key);
-  const tabs = tabsForTemplate(project.department.template_key);
+  const tabs = tabsForTemplate(project.department.template_key).filter(tabIsVisible);
   const briefTabLabel = noun("tab_brief", tDetail("tab_brief"));
+  // Treat `null` (still loading) as read-only so we don't flash an
+  // editable UI before the assignee check resolves.
+  const readOnly = canInput !== true;
 
   return (
     <div className="flex h-full flex-col">
@@ -109,13 +161,29 @@ export default function ProjectDetailPage() {
           <h1 className="text-xl font-semibold">{project.title}</h1>
           <Badge variant="outline">{stageLabel}</Badge>
           {project.deleted_at && <Badge variant="destructive">deleted</Badge>}
+          {readOnly && !project.deleted_at && (
+            <Badge variant="secondary">View only</Badge>
+          )}
         </div>
         {project.deleted_at && (
           <p className="text-muted-foreground text-sm">{tDetail("soft_deleted_banner")}</p>
         )}
+        {readOnly && !project.deleted_at && (
+          <p className="text-muted-foreground text-xs">
+            You&rsquo;re not assigned to the current stage. Ask the project
+            owner to add you to take action on this tab.
+          </p>
+        )}
       </header>
 
-      <Tabs defaultValue="brief" className="flex flex-1 flex-col">
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => {
+          setActiveTab(v);
+          setTabAutoSelected(true);
+        }}
+        className="flex flex-1 flex-col"
+      >
         <TabsList className="bg-muted/30 mx-4 mt-4 flex w-fit gap-1 overflow-x-auto md:mx-6">
           <TabsTrigger value="brief">{briefTabLabel}</TabsTrigger>
           {tabs.map((cap) => (
@@ -131,6 +199,7 @@ export default function ProjectDetailPage() {
             project={project}
             role={auth.user.role}
             isOwner={isOwner}
+            canInput={!readOnly}
             onUpdated={setProject}
           />
         </TabsContent>
@@ -142,6 +211,7 @@ export default function ProjectDetailPage() {
                 project={project}
                 role={role}
                 isOwner={isOwner}
+                canInput={!readOnly}
                 onProjectUpdated={setProject}
               />
             </TabsContent>

@@ -51,6 +51,7 @@ async def create_cast_member(
     notes: str | None = None,
 ) -> CastMemberModel:
     cast = CastMemberModel(
+        business_id=project.business_id,
         project_id=project.id,
         name=name,
         role_description=role_description,

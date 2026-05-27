@@ -6,15 +6,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  confirmLocation,
   createLocation,
   deleteLocation,
   deletePhoto,
@@ -22,7 +19,6 @@ import {
   getPhotoUrl,
   initPhotoUpload,
   listLocations,
-  unconfirmLocation,
 } from "@/features/location_scouting/api";
 import { LockLocationButton } from "@/features/location_scouting/components/LockLocationButton";
 import { performResumableUpload } from "@/features/asset_review_with_timecodes/lib/resumable-upload";
@@ -35,10 +31,13 @@ const PHOTO_MAX_BYTES = 25 * 1024 * 1024;
 
 interface Props {
   project: Project;
+  /** When false, the tab renders read-only — no create form, no
+   *  per-row controls, no Lock button. */
+  canInput?: boolean;
   onProjectUpdated?: (next: Project) => void;
 }
 
-export function LocationTab({ project }: Props) {
+export function LocationTab({ project, canInput = true }: Props) {
   const t = useTranslations("locations");
   const tCommon = useTranslations("common");
   const tErr = useTranslations("errors");
@@ -92,8 +91,9 @@ export function LocationTab({ project }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
-        <LockLocationButton project={project} />
+        {canInput ? <LockLocationButton project={project} /> : null}
       </div>
+      {canInput && (
       <Card className="p-4">
         <form className="space-y-3" onSubmit={onCreate}>
           <div className="space-y-1.5">
@@ -151,6 +151,7 @@ export function LocationTab({ project }: Props) {
           </Button>
         </form>
       </Card>
+      )}
 
       {locations === null ? (
         <p className="text-muted-foreground text-sm">{tCommon("loading")}</p>
@@ -159,7 +160,12 @@ export function LocationTab({ project }: Props) {
       ) : (
         <div className="space-y-3">
           {locations.map((loc) => (
-            <LocationRow key={loc.id} location={loc} onChanged={reload} />
+            <LocationRow
+              key={loc.id}
+              location={loc}
+              canInput={canInput}
+              onChanged={reload}
+            />
           ))}
         </div>
       )}
@@ -167,7 +173,15 @@ export function LocationTab({ project }: Props) {
   );
 }
 
-function LocationRow({ location, onChanged }: { location: Location; onChanged: () => void }) {
+function LocationRow({
+  location,
+  canInput,
+  onChanged,
+}: {
+  location: Location;
+  canInput: boolean;
+  onChanged: () => void;
+}) {
   const t = useTranslations("locations");
   const tCommon = useTranslations("common");
   const tErr = useTranslations("errors");
@@ -178,23 +192,6 @@ function LocationRow({ location, onChanged }: { location: Location; onChanged: (
     location.latitude !== null && location.longitude !== null
       ? `https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`
       : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location.address)}`;
-
-  async function toggleConfirmed(next: boolean) {
-    setBusy(true);
-    try {
-      if (next) {
-        await confirmLocation(location.id);
-        toast.success(t("confirmed_toast"));
-      } else {
-        await unconfirmLocation(location.id);
-      }
-      onChanged();
-    } catch {
-      toast.error(tErr("generic"));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function onDelete() {
     setBusy(true);
@@ -286,58 +283,52 @@ function LocationRow({ location, onChanged }: { location: Location; onChanged: (
               {[location.contact_name, location.contact_phone].filter(Boolean).join(" · ")}
             </p>
           )}
-          {location.confirmed && <Badge variant="secondary">{t("confirmed_badge")}</Badge>}
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5">
-            <Switch
-              checked={location.confirmed}
-              onCheckedChange={toggleConfirmed}
-              disabled={busy}
-              aria-label={t("confirmed_aria")}
-            />
-            <Label className="text-xs">{t("confirmed_label")}</Label>
-          </div>
-          <ConfirmDialog
-            title={t("delete_confirm")}
-            confirmLabel={tCommon("delete")}
-            onConfirm={onDelete}
-          >
-            <Button
-              variant="ghost"
-              size="icon"
-              disabled={busy}
-              aria-label={tCommon("delete")}
+        {canInput && (
+          <div className="flex items-center gap-2">
+            <ConfirmDialog
+              title={t("delete_confirm")}
+              confirmLabel={tCommon("delete")}
+              onConfirm={onDelete}
             >
-              <Trash2 className="size-4" />
-            </Button>
-          </ConfirmDialog>
-        </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={busy}
+                aria-label={tCommon("delete")}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </ConfirmDialog>
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <input
-            ref={fileInput}
-            type="file"
-            accept={PHOTO_ACCEPT}
-            multiple
-            className="hidden"
-            onChange={(e) => {
-              const files = Array.from(e.target.files ?? []);
-              if (files.length > 0) void onUpload(files);
-            }}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fileInput.current?.click()}
-            disabled={busy}
-          >
-            <Camera className="mr-1.5 size-4" />
-            {t("add_photo")}
-          </Button>
-        </div>
+        {canInput && (
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInput}
+              type="file"
+              accept={PHOTO_ACCEPT}
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? []);
+                if (files.length > 0) void onUpload(files);
+              }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fileInput.current?.click()}
+              disabled={busy}
+            >
+              <Camera className="mr-1.5 size-4" />
+              {t("add_photo")}
+            </Button>
+          </div>
+        )}
         {location.photos.length > 0 && (
           <div className="grid grid-cols-3 gap-2 md:grid-cols-6">
             {location.photos.map((p) => (
@@ -345,7 +336,7 @@ function LocationRow({ location, onChanged }: { location: Location; onChanged: (
                 key={p.id}
                 photo={p}
                 onDelete={() => onDeletePhoto(p.id)}
-                disabled={busy}
+                disabled={busy || !canInput}
               />
             ))}
           </div>

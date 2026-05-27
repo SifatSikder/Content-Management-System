@@ -54,6 +54,7 @@ async def create_location(
     scheduled_at: datetime | None,
 ) -> LocationModel:
     location = LocationModel(
+        business_id=project.business_id,
         project_id=project.id,
         address=address,
         latitude=latitude,
@@ -211,6 +212,7 @@ async def attach_photo(
     size_bytes: int,
 ) -> LocationPhotoModel:
     photo = LocationPhotoModel(
+        business_id=location.business_id,
         location_id=location.id,
         uploader_id=uploader.id,
         gcs_bucket=gcs_bucket,

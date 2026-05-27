@@ -58,6 +58,7 @@ async def create_shoot(
     gear_checklist: dict[str, Any],
 ) -> ShootModel:
     shoot = ShootModel(
+        business_id=project.business_id,
         project_id=project.id,
         scheduled_at=scheduled_at,
         gear_checklist_json=gear_checklist,

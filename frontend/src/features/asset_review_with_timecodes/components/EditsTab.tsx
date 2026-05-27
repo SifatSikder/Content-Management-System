@@ -44,10 +44,17 @@ interface Props {
   project: Project;
   role: Role;
   isOwner: boolean;
+  canInput?: boolean;
   onProjectUpdated: (p: Project) => void;
 }
 
-export function EditsTab({ project, role, isOwner, onProjectUpdated }: Props) {
+export function EditsTab({
+  project,
+  role,
+  isOwner,
+  canInput = true,
+  onProjectUpdated,
+}: Props) {
   const t = useTranslations("edits");
   const tCommon = useTranslations("common");
   const tToast = useTranslations("toast");
@@ -65,17 +72,19 @@ export function EditsTab({ project, role, isOwner, onProjectUpdated }: Props) {
   );
   const latest = useMemo(() => (edits && edits.length ? edits[edits.length - 1] : null), [edits]);
   // Permission-service-backed gates. All three return `false` until the
-  // permission map loads (same tradeoff as ScriptTab's lock gates).
-  const canEditAction = useCanIDo(project.department_id, "project.edit");
+  // permission map loads (same tradeoff as ScriptTab's lock gates). All
+  // ANDed with `canInput` so non-assigned watchers see a read-only tab.
+  const canEditAction =
+    useCanIDo(project.department_id, "project.edit") && canInput;
   const canUpload = canEditAction && !project.deleted_at;
-  const canApprove = useCanIDo(
-    project.department_id,
-    "asset_review_with_timecodes.approve",
-  );
-  const canRequestChanges = useCanIDo(
-    project.department_id,
-    "asset_review_with_timecodes.request_changes",
-  );
+  const canApprove =
+    useCanIDo(project.department_id, "asset_review_with_timecodes.approve") &&
+    canInput;
+  const canRequestChanges =
+    useCanIDo(
+      project.department_id,
+      "asset_review_with_timecodes.request_changes",
+    ) && canInput;
 
   const reload = useCallback(async () => {
     try {
@@ -149,7 +158,7 @@ export function EditsTab({ project, role, isOwner, onProjectUpdated }: Props) {
 
   return (
     <div className="space-y-4">
-      {project.stage_key === "shoot_done" ? (
+      {project.stage_key === "shoot_done" && canInput ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Submit raw cuts</CardTitle>

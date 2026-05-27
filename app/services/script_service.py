@@ -41,7 +41,9 @@ async def _get_or_create_script(session: AsyncSession, project: ProjectModel) ->
     script = result.scalar_one_or_none()
     if script is not None:
         return script
-    script = ScriptModel(project_id=project.id)
+    script = ScriptModel(
+        business_id=project.business_id, project_id=project.id
+    )
     session.add(script)
     await session.flush()
     return script
@@ -71,6 +73,7 @@ async def add_version(
     script = await _get_or_create_script(session, project)
     version_number = await _next_version_number(session, script.id)
     version = ScriptVersionModel(
+        business_id=project.business_id,
         script_id=script.id,
         version_number=version_number,
         body_markdown=body_markdown,
@@ -142,6 +145,7 @@ async def add_comment(
     paragraph_anchor: str | None = None,
 ) -> ScriptCommentModel:
     comment = ScriptCommentModel(
+        business_id=version.business_id,
         version_id=version.id,
         author_id=author.id,
         body=body,

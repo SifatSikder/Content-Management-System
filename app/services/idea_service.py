@@ -20,6 +20,8 @@ import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.department_membership import DepartmentMembershipModel
+from app.models.department_role import DepartmentRoleModel
 from app.models.idea_version import (
     IdeaModel,
     IdeaSignoffModel,
@@ -29,7 +31,12 @@ from app.models.idea_version import (
 from app.models.project import ProjectModel
 from app.models.project_stage_assignment import ProjectStageAssignmentModel
 from app.models.user import UserModel
-from app.services import activity_service, project_service
+from app.services import (
+    activity_service,
+    assignment_service,
+    email_service,
+    project_service,
+)
 
 log = structlog.get_logger(__name__)
 
@@ -309,11 +316,111 @@ async def lock_idea(
     return idea
 
 
+# Role keys whose holders get pulled in for idea-enhancement feedback.
+# Mirrors the spec — Asst CEO drafts, CEO + Director give feedback.
+_ENHANCEMENT_REVIEWER_ROLE_KEYS = ("ceo", "director", "junior_director")
+
+
+class NoEnhancementReviewersError(Exception):
+    """No CEO / Director members in the department to assign."""
+
+
+async def request_enhancement(
+    session: AsyncSession,
+    *,
+    project: ProjectModel,
+    actor: UserModel,
+) -> list[uuid.UUID]:
+    """Assign CEO + Director (every member holding those role keys in the
+    project's department) to the `draft_idea` stage and email each one.
+
+    Returns the list of newly-assigned user ids. Idempotent: re-running
+    the action when the same reviewers are already active doesn't add
+    duplicate rows (assignment_service.add is upsert-shaped). Email
+    failures are swallowed (logged but don't roll back the assignments).
+    """
+    if await latest_version(session, project=project) is None:
+        raise IdeaNotFoundError(
+            "Save at least one draft version before requesting enhancement"
+        )
+
+    rows = await session.execute(
+        select(DepartmentMembershipModel.user_id, UserModel.email, UserModel.name)
+        .join(
+            DepartmentRoleModel,
+            DepartmentRoleModel.id == DepartmentMembershipModel.role_id,
+        )
+        .join(UserModel, UserModel.id == DepartmentMembershipModel.user_id)
+        .where(DepartmentMembershipModel.department_id == project.department_id)
+        .where(DepartmentRoleModel.key.in_(_ENHANCEMENT_REVIEWER_ROLE_KEYS))
+    )
+    reviewers = [(row.user_id, row.email, row.name) for row in rows.all()]
+    if not reviewers:
+        raise NoEnhancementReviewersError(
+            "No CEO or Director members to ask for feedback"
+        )
+
+    newly_assigned: list[uuid.UUID] = []
+    for user_id, _email, _name in reviewers:
+        row = await assignment_service.add(
+            session,
+            project=project,
+            stage_key="draft_idea",
+            user_id=user_id,
+            actor=actor,
+        )
+        # `add` is upsert-shaped; existing active rows are returned as-is.
+        # Treat anyone whose row was created in this call as newly assigned.
+        if row.assigned_by == actor.id and row.removed_at is None:
+            newly_assigned.append(user_id)
+
+    await activity_service.record(
+        session,
+        project_id=project.id,
+        actor_id=actor.id,
+        action="idea.enhancement_requested",
+        metadata={"reviewer_count": len(reviewers)},
+    )
+
+    # Fire-and-forget email notifications. Don't let mail failures roll
+    # back the assignment write — the data is the source of truth.
+    project_url = f"/projects/{project.id}"
+    subject = f"Feedback requested: {project.title}"
+    html = (
+        f"<p>{actor.name} asked for your feedback on the draft idea for "
+        f"<strong>{project.title}</strong>.</p>"
+        f"<p>Open the project, switch to the <em>Idea</em> tab, and either "
+        f"approve or request changes.</p>"
+        f"<p><a href=\"{project_url}\">Go to project</a></p>"
+    )
+    for _user_id, email, _name in reviewers:
+        try:
+            await email_service.send_html_email(
+                to=email, subject=subject, html=html
+            )
+        except email_service.EmailNotConfiguredError:
+            log.info(
+                "idea_enhancement_email_skipped_not_configured",
+                to=email,
+                project_id=str(project.id),
+            )
+        except Exception as exc:
+            log.warning(
+                "idea_enhancement_email_failed",
+                to=email,
+                project_id=str(project.id),
+                error=str(exc),
+            )
+
+    return newly_assigned
+
+
 __all__ = [
     "IdeaAlreadyLockedError",
     "IdeaLockGateError",
     "IdeaNotFoundError",
     "IdeaVersionNotFoundError",
+    "NoEnhancementReviewersError",
     "add_signoff",
     "add_version",
     "get_idea",
@@ -323,4 +430,5 @@ __all__ = [
     "list_versions",
     "lock_gate_status",
     "lock_idea",
+    "request_enhancement",
 ]

@@ -227,9 +227,13 @@ def _build_permissions() -> list[dict[str, Any]]:
         rows.append({"role_key": "assistant_director", "action_key": action, "allowed": True})
 
     # --- Director: drives the shoot phase + signs off on idea + scripts --
-    # Project create/edit/delete is intentionally NOT here — only CEO and
-    # Assistant CEO own the project lifecycle.
+    # `project.edit` is needed for content actions (creating shoots,
+    # uploading raw cuts). UI gating for project METADATA edit / delete
+    # uses `project.create` instead — which only CEO + Asst CEO have —
+    # so the Director can manage content without renaming or deleting
+    # the project itself.
     jd_actions = [
+        "project.edit",
         "script_versioning.lock",
         "asset_review_with_timecodes.request_changes",
         "raw_cut.submit",
@@ -242,11 +246,12 @@ def _build_permissions() -> list[dict[str, Any]]:
     for action in jd_actions:
         rows.append({"role_key": "junior_director", "action_key": action, "allowed": True})
 
-    # --- Editor: uploads cuts; no project lifecycle ----------------------
-    # Stage moves limited to editing → edit_review (submit for review) and
-    # the bounce-back from edit_review (when CEO requests changes via the
-    # asset-review handler). No project.create/edit/delete.
+    # --- Editor: uploads cuts; no lifecycle (no create/delete) -----------
+    # `project.edit` is needed to upload cut versions through the asset
+    # review route. UI gating for project metadata edit / delete uses
+    # `project.create` instead.
     editor_actions = [
+        "project.edit",
         _stage_move_key("editing", "edit_review"),
         _stage_move_key("edit_review", "editing"),
     ]

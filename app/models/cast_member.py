@@ -25,6 +25,12 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 class ParticipantModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "participants"
 
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("businesses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     project_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="CASCADE"),

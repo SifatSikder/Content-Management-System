@@ -31,6 +31,12 @@ class ScriptModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "scripts"
 
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("businesses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     project_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="CASCADE"),
@@ -52,6 +58,12 @@ class ScriptVersionModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint("script_id", "version_number", name="uq_script_version_number"),
     )
 
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("businesses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     script_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("scripts.id", ondelete="CASCADE"),
@@ -78,6 +90,12 @@ class ScriptCommentModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_script_comments_version_created", "version_id", "created_at"),
     )
 
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("businesses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     version_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("script_versions.id", ondelete="CASCADE"),

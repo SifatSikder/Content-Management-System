@@ -82,6 +82,7 @@ async def add_edit_version(
 ) -> EditVersionModel:
     version_number = await _next_version_number(session, project.id)
     edit = EditVersionModel(
+        business_id=project.business_id,
         project_id=project.id,
         version_number=version_number,
         uploader_id=uploader.id,
@@ -200,6 +201,7 @@ async def add_edit_comment(
     timestamp_seconds: float,
 ) -> EditCommentModel:
     comment = EditCommentModel(
+        business_id=project.business_id,
         edit_version_id=edit.id,
         author_id=author.id,
         timestamp_seconds=timestamp_seconds,

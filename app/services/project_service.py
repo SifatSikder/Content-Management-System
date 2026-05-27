@@ -22,10 +22,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import structlog
-from sqlalchemy import ColumnElement, and_, or_, select
+from sqlalchemy import ColumnElement, and_, distinct, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.department import DepartmentModel
+from app.models.department_membership import DepartmentMembershipModel
+from app.models.department_role import DepartmentRoleModel
+from app.models.department_role_permission import DepartmentRolePermissionModel
 from app.models.enums import Category, Role
 from app.models.project import ProjectModel
 from app.models.project_stage_assignment import ProjectStageAssignmentModel
@@ -186,20 +189,47 @@ async def list_projects(
     if not filters.include_deleted:
         where.append(ProjectModel.deleted_at.is_(None))
 
-    # Visibility: non-CEO users only see projects they own OR are an active
-    # assignee on (across any stage). CEO super-admins bypass the filter.
+    # Visibility:
+    #   * CEO super-admins: every project.
+    #   * Anyone with `project.create` in a business (= CEO + Assistant CEO
+    #     by the default permission seed): every project in those businesses.
+    #   * Everyone else: only projects they own OR are an active assignee on.
     if not user.is_super_admin:
+        admin_business_ids = list(
+            (
+                await session.execute(
+                    select(distinct(DepartmentMembershipModel.business_id))
+                    .join(
+                        DepartmentRoleModel,
+                        DepartmentRoleModel.id == DepartmentMembershipModel.role_id,
+                    )
+                    .join(
+                        DepartmentRolePermissionModel,
+                        DepartmentRolePermissionModel.department_role_id
+                        == DepartmentRoleModel.id,
+                    )
+                    .where(
+                        DepartmentMembershipModel.user_id == user.id,
+                        DepartmentRolePermissionModel.action_key == "project.create",
+                        DepartmentRolePermissionModel.allowed.is_(True),
+                    )
+                )
+            ).scalars().all()
+        )
         assigned_subq = (
             select(ProjectStageAssignmentModel.project_id)
             .where(ProjectStageAssignmentModel.user_id == user.id)
             .where(ProjectStageAssignmentModel.removed_at.is_(None))
         )
-        where.append(
-            or_(
-                ProjectModel.owner_id == user.id,
-                ProjectModel.id.in_(assigned_subq),
+        visibility_clauses: list[ColumnElement[bool]] = [
+            ProjectModel.owner_id == user.id,
+            ProjectModel.id.in_(assigned_subq),
+        ]
+        if admin_business_ids:
+            visibility_clauses.append(
+                ProjectModel.business_id.in_(admin_business_ids)
             )
-        )
+        where.append(or_(*visibility_clauses))
 
     if filters.mine:
         where.append(ProjectModel.owner_id == user.id)

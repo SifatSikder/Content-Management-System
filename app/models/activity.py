@@ -27,6 +27,16 @@ class ActivityModel(UUIDPrimaryKeyMixin, Base):
         Index("ix_activities_project_created", "project_id", "created_at"),
     )
 
+    # Denormalised business_id so the table satisfies the shared RLS
+    # `tenant_isolation` policy. Populated by `activity_service.record`
+    # from the parent project's business_id (or left NULL for system
+    # rows that aren't project-scoped — CEO super-admin only).
+    business_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("businesses.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     project_id: Mapped[uuid.UUID | None] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="CASCADE"),

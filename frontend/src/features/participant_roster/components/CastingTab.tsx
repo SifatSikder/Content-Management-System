@@ -42,9 +42,10 @@ const RELEASE_MAX_BYTES = 25 * 1024 * 1024;
 
 interface Props {
   project: Project;
+  canInput?: boolean;
 }
 
-export function CastingTab({ project }: Props) {
+export function CastingTab({ project, canInput = true }: Props) {
   const t = useTranslations("casting");
   const tCommon = useTranslations("common");
   const tErr = useTranslations("errors");
@@ -95,8 +96,9 @@ export function CastingTab({ project }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
-        <LockCastingButton project={project} />
+        {canInput ? <LockCastingButton project={project} /> : null}
       </div>
+      {canInput && (
       <Card className="p-4">
         <form className="space-y-3" onSubmit={onCreate}>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -143,6 +145,7 @@ export function CastingTab({ project }: Props) {
           </Button>
         </form>
       </Card>
+      )}
 
       {cast === null ? (
         <p className="text-muted-foreground text-sm">{tCommon("loading")}</p>

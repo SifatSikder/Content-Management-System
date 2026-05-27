@@ -31,6 +31,7 @@ const CALL_SHEET_MAX_BYTES = 25 * 1024 * 1024;
 
 interface Props {
   project: Project;
+  canInput?: boolean;
 }
 
 function statusBadgeVariant(s: ShootStatus): "default" | "secondary" | "outline" {
@@ -51,7 +52,7 @@ function parseDateTimeLocal(value: string): string | null {
   return new Date(value).toISOString();
 }
 
-export function ShootTab({ project }: Props) {
+export function ShootTab({ project, canInput = true }: Props) {
   const t = useTranslations("shoots");
   const tCommon = useTranslations("common");
   const tErr = useTranslations("errors");
@@ -100,6 +101,7 @@ export function ShootTab({ project }: Props) {
 
   return (
     <div className="space-y-4">
+      {canInput && (
       <Card className="p-4">
         <form className="space-y-3" onSubmit={onCreate}>
           <div className="space-y-1.5">
@@ -127,6 +129,7 @@ export function ShootTab({ project }: Props) {
           </Button>
         </form>
       </Card>
+      )}
 
       {shoots === null ? (
         <p className="text-muted-foreground text-sm">{tCommon("loading")}</p>

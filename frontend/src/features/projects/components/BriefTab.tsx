@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -22,27 +22,42 @@ import type { Role } from "@/features/auth/constants";
 import { useCanIDo } from "@/features/permissions/hooks/usePermissions";
 import { updateProject } from "@/features/projects/api";
 import { CATEGORIES, type Category } from "@/features/projects/constants";
+import { DeleteProjectDialog } from "@/features/projects/components/DeleteProjectDialog";
 import type { Project } from "@/features/projects/types";
 
 interface Props {
   project: Project;
   role: Role;
   isOwner: boolean;
+  canInput: boolean;
   onUpdated: (p: Project) => void;
 }
 
-export function BriefTab({ project, role: _role, isOwner: _isOwner, onUpdated }: Props) {
+export function BriefTab({
+  project,
+  role: _role,
+  isOwner: _isOwner,
+  canInput,
+  onUpdated,
+}: Props) {
   const t = useTranslations("projects");
   const tCat = useTranslations("categories");
   const tCommon = useTranslations("common");
   const tToast = useTranslations("toast");
   const tErr = useTranslations("errors");
 
-  // Permission-backed gate. Returns false until the permission map loads,
-  // hiding the Edit button during that brief window.
-  const canEditAction = useCanIDo(project.department_id, "project.edit");
-  const editable = canEditAction && !project.deleted_at;
+  // Metadata-edit + delete are lifecycle actions limited to the roles
+  // that can also CREATE projects (CEO + Assistant CEO). `project.edit`
+  // is granted more widely so directors/editors can manage their content
+  // (uploads, shoots) — that's a different action than renaming the
+  // project itself.
+  const canManageLifecycle =
+    useCanIDo(project.department_id, "project.create") && canInput;
+  const canDelete =
+    useCanIDo(project.department_id, "project.delete") && canInput;
+  const editable = canManageLifecycle && !project.deleted_at;
   const [editing, setEditing] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [title, setTitle] = useState(project.title);
   const [description, setDescription] = useState(project.description ?? "");
   const [category, setCategory] = useState<Category>(project.category);
@@ -72,11 +87,26 @@ export function BriefTab({ project, role: _role, isOwner: _isOwner, onUpdated }:
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-base">{t("title_label")}</CardTitle>
-        {editable && !editing && (
-          <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
-            <Pencil className="mr-2 size-4" />
-            {tCommon("edit")}
-          </Button>
+        {!editing && (
+          <div className="flex items-center gap-1">
+            {editable && (
+              <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
+                <Pencil className="mr-2 size-4" />
+                {tCommon("edit")}
+              </Button>
+            )}
+            {canDelete && !project.deleted_at && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDeleteOpen(true)}
+                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              >
+                <Trash2 className="mr-2 size-4" />
+                {tCommon("delete")}
+              </Button>
+            )}
+          </div>
         )}
       </CardHeader>
       <CardContent className="space-y-4">
@@ -151,6 +181,11 @@ export function BriefTab({ project, role: _role, isOwner: _isOwner, onUpdated }:
           </>
         )}
       </CardContent>
+      <DeleteProjectDialog
+        project={project}
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+      />
     </Card>
   );
 }

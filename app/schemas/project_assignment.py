@@ -18,7 +18,6 @@ class AssignmentPublic(BaseModel):
     stage_key: str
     user_id: uuid.UUID
     user: OwnerPublic
-    slot_key: str | None
     assigned_at: datetime
     assigned_by: uuid.UUID | None
 

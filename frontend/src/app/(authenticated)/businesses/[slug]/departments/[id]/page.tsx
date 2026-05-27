@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, Pencil } from "lucide-react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -15,6 +15,7 @@ import { getDepartment, updateDepartment } from "@/features/departments/api";
 import { DepartmentMembersEditor } from "@/features/departments/components/DepartmentMembersEditor";
 import { RoleEditor } from "@/features/departments/components/RoleEditor";
 import { StageHandoffsEditor } from "@/features/departments/components/StageHandoffsEditor";
+import { usePermissions } from "@/features/permissions/hooks/usePermissions";
 import type { Department } from "@/features/departments/types";
 import { ApiError } from "@/lib/api-client";
 
@@ -22,11 +23,24 @@ export default function DepartmentDetailPage() {
   const t = useTranslations("departments");
   const tCommon = useTranslations("common");
   const params = useParams<{ id: string; slug: string }>();
+  const router = useRouter();
   const [department, setDepartment] = useState<Department | null>(null);
   const [loading, setLoading] = useState(true);
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [savingName, setSavingName] = useState(false);
+
+  // Admin lockdown: only roles holding `department.edit_handoffs` (CEO +
+  // Assistant CEO by default) can view roles / members / handoffs.
+  // Everyone else bounces to /projects.
+  const perms = usePermissions(params.id);
+  useEffect(() => {
+    if (!perms.data) return;
+    const canAdmin =
+      perms.data.is_super_admin ||
+      perms.data.allowed["department.edit_handoffs"] === true;
+    if (!canAdmin) router.replace("/projects");
+  }, [perms.data, router]);
 
   const load = useCallback(async () => {
     setLoading(true);

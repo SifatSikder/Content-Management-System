@@ -13,6 +13,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { listDepartmentMembers } from "@/features/departments/api";
 import type { DepartmentMembership } from "@/features/departments/types";
+import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useCanIDo } from "@/features/permissions/hooks/usePermissions";
 import {
   addStageAssignee,
@@ -44,7 +45,15 @@ interface Props {
  * card doesn't render an empty hole.
  */
 export function StageAssigneesPopover({ project, compact = true }: Props) {
-  const canEdit = useCanIDo(project.department_id, "project.edit");
+  // Only the project owner (typically the Assistant CEO who created it)
+  // can manage assignees. Others see a static chip strip — the broader
+  // `project.edit` permission isn't enough here because we want a single
+  // accountable owner for who's on each card.
+  const auth = useAuth();
+  const hasEditPerm = useCanIDo(project.department_id, "project.edit");
+  const isSuperAdmin = auth.user?.is_super_admin === true;
+  const isOwner = auth.user?.id === project.owner_id;
+  const canEdit = (isOwner || isSuperAdmin) && hasEditPerm;
 
   const [open, setOpen] = useState(false);
   const [assignees, setAssignees] = useState<AssignmentPublic[] | null>(null);
@@ -112,7 +121,6 @@ export function StageAssigneesPopover({ project, compact = true }: Props) {
         stage_key: project.stage_key,
         user_id: project.owner_id,
         user: project.owner,
-        slot_key: null,
         assigned_at: project.created_at,
         assigned_by: null,
       } as AssignmentPublic,
@@ -200,11 +208,6 @@ export function StageAssigneesPopover({ project, compact = true }: Props) {
                     <div className="truncate text-xs font-medium">
                       {a.user.name}
                     </div>
-                    {a.slot_key ? (
-                      <div className="text-muted-foreground text-[10px]">
-                        {a.slot_key}
-                      </div>
-                    ) : null}
                   </div>
                   <Button
                     size="icon"

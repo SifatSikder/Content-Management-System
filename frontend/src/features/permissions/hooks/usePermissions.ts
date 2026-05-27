@@ -67,3 +67,18 @@ export function useCanIDo(
   if (data.is_super_admin) return true;
   return data.allowed[actionKey] === true;
 }
+
+/**
+ * True if the user holds *any* of the given action keys (or is super-admin).
+ * Useful for tab visibility where multiple permissions can grant access.
+ */
+export function useCanIDoAny(
+  departmentId: string | null | undefined,
+  actionKeys: readonly string[],
+): boolean {
+  const { data } = usePermissions(departmentId);
+  if (!data) return false;
+  if (data.is_super_admin) return true;
+  if (actionKeys.length === 0) return true;
+  return actionKeys.some((k) => data.allowed[k] === true);
+}

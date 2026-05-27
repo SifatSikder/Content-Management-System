@@ -37,6 +37,7 @@ interface Props {
   project: Project;
   role: Role;
   isOwner: boolean;
+  canInput?: boolean;
   onProjectUpdated: (p: Project) => void;
 }
 
@@ -44,7 +45,13 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 
-export function ScriptTab({ project, role, isOwner, onProjectUpdated }: Props) {
+export function ScriptTab({
+  project,
+  role,
+  isOwner,
+  canInput = true,
+  onProjectUpdated,
+}: Props) {
   const t = useTranslations("script");
   const tToast = useTranslations("toast");
   const tErr = useTranslations("errors");
@@ -53,10 +60,15 @@ export function ScriptTab({ project, role, isOwner, onProjectUpdated }: Props) {
   // Permission-service-backed gates. All three return `false` until the
   // permission map loads, hiding the affordances during that brief window
   // (strictly safer than flashing buttons the user might not have).
-  const canEditAction = useCanIDo(project.department_id, "project.edit");
+  // `canInput` is the additional "you're the project owner or an active
+  // assignee on the current stage" gate.
+  const canEditAction =
+    useCanIDo(project.department_id, "project.edit") && canInput;
   const canEdit = canEditAction && !locked && !project.deleted_at;
-  const canLock = useCanIDo(project.department_id, "script_versioning.lock");
-  const canUnlock = useCanIDo(project.department_id, "script_versioning.unlock");
+  const canLock =
+    useCanIDo(project.department_id, "script_versioning.lock") && canInput;
+  const canUnlock =
+    useCanIDo(project.department_id, "script_versioning.unlock") && canInput;
 
   const [versions, setVersions] = useState<ScriptVersion[]>([]);
   const [currentId, setCurrentId] = useState<string | null>(null);

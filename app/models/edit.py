@@ -38,6 +38,12 @@ class EditVersionModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint("project_id", "version_number", name="uq_edit_version_number"),
     )
 
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("businesses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     project_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="CASCADE"),
@@ -84,6 +90,12 @@ class EditCommentModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Index("ix_edit_comments_version_created", "edit_version_id", "created_at"),
     )
 
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("businesses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     edit_version_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("edit_versions.id", ondelete="CASCADE"),

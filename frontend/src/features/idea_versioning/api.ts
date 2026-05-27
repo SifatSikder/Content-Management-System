@@ -45,3 +45,11 @@ export function lockIdea(projectId: string): Promise<IdeaSummary> {
     method: "POST",
   });
 }
+
+export function requestIdeaEnhancement(
+  projectId: string,
+): Promise<{ status: string; newly_assigned_user_ids: string[] }> {
+  return apiFetchAuthed(`/projects/${projectId}/idea/request-enhancement`, {
+    method: "POST",
+  });
+}

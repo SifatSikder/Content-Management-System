@@ -18,6 +18,12 @@ from app.models.enums import ShootStatus, pg_enum
 class ShootModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "shoots"
 
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("businesses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     project_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="CASCADE"),

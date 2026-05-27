@@ -25,11 +25,10 @@ class StageHandoff(TypedDict):
 
 CONTENT_CREATION_DEFAULT_HANDOFFS: list[StageHandoff] = [
     {"stage_key": "location_scouting", "role_keys": ["assistant_director"]},
-    {
-        "stage_key": "draft_idea",
-        "role_keys": ["assistant_director", "ceo", "junior_director"],
-        "removable": True,
-    },
+    # draft_idea starts with only the Asst CEO assigned. CEO + Director
+    # get pulled in on demand via `request_enhancement` when the owner
+    # is ready for feedback — they're notified by email at that point.
+    {"stage_key": "draft_idea", "role_keys": ["assistant_director"]},
     {"stage_key": "script_drafting", "role_keys": ["assistant_director"]},
     {"stage_key": "script_review", "role_keys": ["assistant_director", "ceo"]},
     {"stage_key": "casting", "role_keys": ["assistant_director"]},
