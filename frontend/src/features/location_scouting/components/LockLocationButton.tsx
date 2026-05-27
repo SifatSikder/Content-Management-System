@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/features/auth/hooks/useAuth";
 import {
   lockProjectLocation,
   unlockProjectLocation,
@@ -29,7 +30,14 @@ interface Props {
  *   CEO / Director who can see the project but not change it).
  */
 export function LockLocationButton({ project, onChanged }: Props) {
-  const canLock = useCanIDo(project.department_id, "location.lock");
+  // Lock / Unlock is owner-only. Even the CEO super-admin (who would
+  // otherwise pass every permission check) only sees the static badge
+  // when the project belongs to someone else — they're a watcher here,
+  // not the executive driver.
+  const auth = useAuth();
+  const isOwner = auth.user?.id === project.owner_id;
+  const hasLockPerm = useCanIDo(project.department_id, "location.lock");
+  const canLock = isOwner && hasLockPerm;
   const [busy, setBusy] = useState(false);
 
   const locked = project.location_locked_at !== null;
