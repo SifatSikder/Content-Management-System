@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, String, Text
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -49,9 +49,6 @@ class ParticipantModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     contact_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # GCS object name for the signed release-form file (cast mode only).
     release_form_object_name: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    confirmed: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default="false"
-    )
 
     # Lead-mode-only fields. NULL on cast rows.
     source: Mapped[str | None] = mapped_column(String(120), nullable=True)

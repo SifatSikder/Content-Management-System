@@ -6,7 +6,6 @@ export interface CastMember {
   contact_email: string | null;
   contact_phone: string | null;
   release_form_object_name: string | null;
-  confirmed: boolean;
   kind: "cast" | "lead";
   source: string | null;
   notes: string | null;

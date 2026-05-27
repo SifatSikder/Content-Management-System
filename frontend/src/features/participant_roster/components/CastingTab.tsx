@@ -6,7 +6,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -19,21 +18,19 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  confirmCast,
   createCast,
   deleteCast,
   finaliseRelease,
   getReleaseUrl,
   initReleaseUpload,
   listCast,
-  unconfirmCast,
 } from "@/features/participant_roster/api";
 import { LockCastingButton } from "@/features/participant_roster/components/LockCastingButton";
 import type { CastMember } from "@/features/participant_roster/types";
 import { performResumableUpload } from "@/features/asset_review_with_timecodes/lib/resumable-upload";
+import { getProject } from "@/features/projects/api";
 import type { Project } from "@/features/projects/types";
 import { ApiError } from "@/lib/api-client";
 
@@ -44,13 +41,31 @@ interface Props {
   project: Project;
   isOwner?: boolean;
   canInput?: boolean;
+  onProjectUpdated?: (p: Project) => void;
 }
 
-export function CastingTab({ project, isOwner = false }: Props) {
+export function CastingTab({
+  project,
+  isOwner = false,
+  onProjectUpdated,
+}: Props) {
   // Casting is owner-only — Asst CEO drives this; CEO + Director see
   // read-only. Mirrors how Idea + Script gate writes on `isOwner`
-  // rather than the broader stage-assignee gate.
-  const canWrite = isOwner;
+  // rather than the broader stage-assignee gate. Locking the casting
+  // also freezes all writes (no new cast, no confirm toggle, no
+  // delete, no release upload) until the owner unlocks via the Lock
+  // button area; mirrors the Lock Idea/Lock Script lock-down.
+  const castingLocked = project.casting_locked_at !== null;
+  const canWrite = isOwner && !castingLocked;
+
+  async function refreshProject() {
+    try {
+      const next = await getProject(project.id);
+      onProjectUpdated?.(next);
+    } catch {
+      // Non-fatal — the stage chip will refresh on next nav.
+    }
+  }
   const t = useTranslations("casting");
   const tCommon = useTranslations("common");
   const tErr = useTranslations("errors");
@@ -101,7 +116,11 @@ export function CastingTab({ project, isOwner = false }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
-        <LockCastingButton project={project} isOwner={canWrite} />
+        <LockCastingButton
+          project={project}
+          isOwner={isOwner}
+          onLocked={() => void refreshProject()}
+        />
       </div>
       {canWrite && (
       <Card className="p-4">
@@ -187,23 +206,6 @@ function CastRow({
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
 
-  async function toggle(next: boolean) {
-    setBusy(true);
-    try {
-      if (next) {
-        await confirmCast(cast.id);
-        toast.success(t("confirmed_toast"));
-      } else {
-        await unconfirmCast(cast.id);
-      }
-      onChanged();
-    } catch {
-      toast.error(tErr("generic"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function onDelete() {
     setBusy(true);
     try {
@@ -248,10 +250,7 @@ function CastRow({
     <Card className="space-y-3 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium">{cast.name}</span>
-            {cast.confirmed && <Badge variant="secondary">{t("confirmed_badge")}</Badge>}
-          </div>
+          <span className="text-sm font-medium">{cast.name}</span>
           {cast.role_description && (
             <p className="text-muted-foreground text-xs">{cast.role_description}</p>
           )}
@@ -262,33 +261,20 @@ function CastRow({
           )}
         </div>
         {canWrite ? (
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5">
-              <Switch
-                checked={cast.confirmed}
-                onCheckedChange={toggle}
-                disabled={busy}
-                aria-label={t("confirmed_aria")}
-              />
-              <Label className="text-xs">{t("confirmed_label")}</Label>
-            </div>
-            <ConfirmDialog
-              title={t("delete_confirm")}
-              confirmLabel={tCommon("delete")}
-              onConfirm={onDelete}
+          <ConfirmDialog
+            title={t("delete_confirm")}
+            confirmLabel={tCommon("delete")}
+            onConfirm={onDelete}
+          >
+            <Button
+              variant="ghost"
+              size="icon"
+              disabled={busy}
+              aria-label={tCommon("delete")}
             >
-              <Button
-                variant="ghost"
-                size="icon"
-                disabled={busy}
-                aria-label={tCommon("delete")}
-              >
-                <Trash2 className="size-4" />
-              </Button>
-            </ConfirmDialog>
-          </div>
-        ) : cast.confirmed ? (
-          <Badge variant="secondary">{t("confirmed_badge")}</Badge>
+              <Trash2 className="size-4" />
+            </Button>
+          </ConfirmDialog>
         ) : null}
       </div>
 
@@ -416,7 +402,7 @@ function ReleaseThumbnail({ castId, castName }: { castId: string; castName: stri
           )}
         </button>
       </DialogTrigger>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="!max-w-[min(96vw,1400px)] sm:!max-w-[min(96vw,1400px)]">
         <DialogHeader>
           <DialogTitle>
             {t("release_preview_title", { name: castName })}
@@ -432,7 +418,7 @@ function ReleaseThumbnail({ castId, castName }: { castId: string; castName: stri
             <iframe
               src={info.blobUrl ?? info.url}
               title={castName}
-              className="bg-muted h-[70vh] w-full rounded border"
+              className="bg-muted h-[85vh] w-full rounded border"
             />
           ) : isImage ? (
             <div className="flex justify-center">
@@ -440,7 +426,7 @@ function ReleaseThumbnail({ castId, castName }: { castId: string; castName: stri
               <img
                 src={info.url}
                 alt={castName}
-                className="max-h-[70vh] max-w-full rounded"
+                className="max-h-[85vh] max-w-full rounded"
               />
             </div>
           ) : (

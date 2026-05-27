@@ -137,28 +137,6 @@ async def attach_release_form(
     return cast
 
 
-async def confirm_cast_member(
-    session: AsyncSession,
-    *,
-    cast: CastMemberModel,
-    project: ProjectModel,
-    actor: UserModel,
-    confirmed: bool,
-) -> CastMemberModel:
-    if cast.confirmed == confirmed:
-        return cast
-    cast.confirmed = confirmed
-    await activity_service.record(
-        session,
-        project_id=project.id,
-        actor_id=actor.id,
-        action="cast.confirmed" if confirmed else "cast.unconfirmed",
-        metadata={"cast_id": str(cast.id)},
-    )
-
-    return cast
-
-
 class CastingLockError(Exception):
     """Raised when `lock_casting` is called from an invalid stage."""
 
@@ -188,6 +166,31 @@ async def lock_casting(
     return project
 
 
+async def unlock_casting(
+    session: AsyncSession, *, project: ProjectModel, actor: UserModel
+) -> ProjectModel:
+    """Clear the casting lock so the owner can edit the cast set again.
+    Symmetric to `lock_casting`: if the project is currently on
+    `shoot_schedule` (just locked), roll it back to `casting`. If work
+    has progressed further (Shoot, Edit, …) leave the stage alone — the
+    owner can drag it back manually. Mirrors `unlock_script`."""
+    if project.casting_locked_at is None:
+        return project
+    project.casting_locked_at = None
+    project.casting_locked_by = None
+    if project.stage_key == "shoot_schedule":
+        await _advance_stage(
+            session, project=project, target_key="casting", actor_id=actor.id
+        )
+    await activity_service.record(
+        session,
+        project_id=project.id,
+        actor_id=actor.id,
+        action="casting.unlocked",
+    )
+    return project
+
+
 async def delete_cast_member(
     session: AsyncSession, *, cast: CastMemberModel, actor: UserModel
 ) -> None:
@@ -207,11 +210,11 @@ __all__ = [
     "CastMemberNotFoundError",
     "CastingLockError",
     "attach_release_form",
-    "confirm_cast_member",
     "create_cast_member",
     "delete_cast_member",
     "get_cast_member",
     "list_cast_members",
     "lock_casting",
+    "unlock_casting",
     "update_cast_member",
 ]

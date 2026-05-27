@@ -117,6 +117,28 @@ async def post_lock_casting(
     return {"status": "locked"}
 
 
+@projects_router.post(
+    "/unlock",
+    summary="Clear the casting lock (owner-only) and roll the stage back from shoot_schedule if applicable",
+    dependencies=[Depends(require_action("casting.lock"))],
+)
+async def post_unlock_casting(
+    project: Annotated[
+        ProjectModel, Depends(require_project_access(ProjectAccess.VIEW))
+    ],
+    user: CurrentUser,
+    session: SessionDep,
+) -> dict[str, str]:
+    # Owner-only — mirrors the Lock Idea / Lock Script unlock semantics.
+    if project.owner_id != user.id and not user.is_super_admin:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Only the project owner can unlock casting"
+        )
+    await cast_service.unlock_casting(session, project=project, actor=user)
+    await session.commit()
+    return {"status": "unlocked"}
+
+
 # ---------- instance ----------
 
 async def _project_for_cast(session: SessionDep, cast: CastMemberModel) -> ProjectModel:
@@ -169,40 +191,6 @@ async def patch_cast(
     if "contact_email" in updates and updates["contact_email"] is not None:
         updates["contact_email"] = str(updates["contact_email"])
     await cast_service.update_cast_member(session, cast=cast, actor=user, fields=updates)
-    await session.commit()
-    await session.refresh(cast)
-    return CastMemberPublic.model_validate(cast)
-
-
-@cast_router.post(
-    "/{cast_id}/confirm",
-    response_model=CastMemberPublic,
-    summary="Confirm a cast member (may auto-advance the project)",
-)
-async def post_confirm_cast(
-    cast_id: uuid.UUID, user: CurrentUser, session: SessionDep
-) -> CastMemberPublic:
-    cast, project = await _load_cast_and_project(session, cast_id, user, ProjectAccess.EDIT)
-    await cast_service.confirm_cast_member(
-        session, cast=cast, project=project, actor=user, confirmed=True
-    )
-    await session.commit()
-    await session.refresh(cast)
-    return CastMemberPublic.model_validate(cast)
-
-
-@cast_router.post(
-    "/{cast_id}/unconfirm",
-    response_model=CastMemberPublic,
-    summary="Un-confirm a cast member",
-)
-async def post_unconfirm_cast(
-    cast_id: uuid.UUID, user: CurrentUser, session: SessionDep
-) -> CastMemberPublic:
-    cast, project = await _load_cast_and_project(session, cast_id, user, ProjectAccess.EDIT)
-    await cast_service.confirm_cast_member(
-        session, cast=cast, project=project, actor=user, confirmed=False
-    )
     await session.commit()
     await session.refresh(cast)
     return CastMemberPublic.model_validate(cast)

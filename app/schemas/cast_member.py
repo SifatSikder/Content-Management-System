@@ -47,7 +47,6 @@ class CastMemberPublic(BaseModel):
     contact_email: str | None
     contact_phone: str | None
     release_form_object_name: str | None
-    confirmed: bool
     kind: str
     source: str | None
     notes: str | None

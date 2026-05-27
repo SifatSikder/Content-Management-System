@@ -19,14 +19,6 @@ export function createCast(projectId: string, body: CreateCastBody): Promise<Cas
   });
 }
 
-export function confirmCast(castId: string): Promise<CastMember> {
-  return apiFetchAuthed<CastMember>(`/cast/${castId}/confirm`, { method: "POST" });
-}
-
-export function unconfirmCast(castId: string): Promise<CastMember> {
-  return apiFetchAuthed<CastMember>(`/cast/${castId}/unconfirm`, { method: "POST" });
-}
-
 export function deleteCast(castId: string): Promise<void> {
   return apiFetchAuthed<void>(`/cast/${castId}`, { method: "DELETE" });
 }
@@ -64,6 +56,13 @@ export function getReleaseUrl(castId: string): Promise<ReleaseUrlResponse> {
 export function lockProjectCasting(projectId: string): Promise<{ status: string }> {
   return apiFetchAuthed<{ status: string }>(
     `/projects/${projectId}/cast/lock`,
+    { method: "POST" },
+  );
+}
+
+export function unlockProjectCasting(projectId: string): Promise<{ status: string }> {
+  return apiFetchAuthed<{ status: string }>(
+    `/projects/${projectId}/cast/unlock`,
     { method: "POST" },
   );
 }
