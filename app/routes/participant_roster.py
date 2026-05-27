@@ -6,7 +6,7 @@ import uuid
 from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 
 from app.auth.dependencies import (
@@ -233,6 +233,7 @@ async def post_init_release_upload(
     body: InitReleaseUploadBody,
     user: CurrentUser,
     session: SessionDep,
+    request: Request,
 ) -> InitReleaseUploadResponse:
     if body.content_type not in ALLOWED_RELEASE_CONTENT_TYPES:
         raise HTTPException(
@@ -243,11 +244,16 @@ async def post_init_release_upload(
     settings = get_settings()
     bucket = settings.gcs_bucket_assets
     object_name = _release_object_name(project.id, cast.id, body.content_type)
+    # Pass through the browser's Origin so the GCS resumable session
+    # echoes Access-Control-Allow-Origin on the PUT. Same fix as the
+    # location-photo + edit-upload paths.
+    origin = request.headers.get("origin")
     session_url = await storage_service.create_resumable_upload_session(
         bucket_name=bucket,
         object_name=object_name,
         content_type=body.content_type,
         size_bytes=body.size_bytes,
+        origin=origin,
     )
     return InitReleaseUploadResponse(
         upload_session_url=session_url, gcs_bucket=bucket, gcs_object_name=object_name

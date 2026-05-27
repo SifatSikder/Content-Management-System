@@ -16,7 +16,7 @@ import uuid
 from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 
 from app.auth.dependencies import (
@@ -252,6 +252,7 @@ async def post_init_photo_upload(
     body: InitPhotoUploadBody,
     user: CurrentUser,
     session: SessionDep,
+    request: Request,
 ) -> InitPhotoUploadResponse:
     if body.content_type not in ALLOWED_PHOTO_CONTENT_TYPES:
         raise HTTPException(
@@ -264,11 +265,19 @@ async def post_init_photo_upload(
     settings = get_settings()
     bucket = settings.gcs_bucket_assets
     object_name = _photo_object_name(project.id, location.id, body.content_type)
+    # Same as the edit + logo upload paths: pass the request's Origin
+    # through so GCS binds the resumable session to it and echoes
+    # `Access-Control-Allow-Origin` on the PUT response. Without this,
+    # the PUT bytes land in GCS but the browser rejects the response
+    # for missing CORS headers, `fetch()` throws, and the finalise call
+    # never fires.
+    origin = request.headers.get("origin")
     session_url = await storage_service.create_resumable_upload_session(
         bucket_name=bucket,
         object_name=object_name,
         content_type=body.content_type,
         size_bytes=body.size_bytes,
+        origin=origin,
     )
     return InitPhotoUploadResponse(
         upload_session_url=session_url, gcs_bucket=bucket, gcs_object_name=object_name
