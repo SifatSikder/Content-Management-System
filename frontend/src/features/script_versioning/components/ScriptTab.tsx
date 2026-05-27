@@ -1,294 +1,455 @@
 "use client";
 
-import { Lock, LockOpen, Save, Send } from "lucide-react";
-import { useTranslations } from "next-intl";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Lock, LockOpen, Pencil, Save, Send, X } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { ImportGdocDialog } from "@/features/script_versioning/components/ImportGdocDialog";
-import { ScriptComments } from "@/features/script_versioning/components/ScriptComments";
 import { ScriptEditor } from "@/features/script_versioning/components/ScriptEditor";
+import { ScriptRequestFeedbackDialog } from "@/features/script_versioning/components/ScriptRequestFeedbackDialog";
+import { ScriptSignoffPanel } from "@/features/script_versioning/components/ScriptSignoffPanel";
+import { ScriptVersionHistoryItem } from "@/features/script_versioning/components/ScriptVersionHistoryItem";
 import { useCanIDo } from "@/features/permissions/hooks/usePermissions";
 import {
   createVersion,
+  getScriptSummary,
   listVersions,
   lockScript,
-  submitScript,
   unlockScript,
+  updateVersion,
 } from "@/features/script_versioning/api";
-import type { ScriptVersion } from "@/features/script_versioning/types";
-import { getProject } from "@/features/projects/api";
+import type {
+  ScriptSummary,
+  ScriptVersion,
+} from "@/features/script_versioning/types";
 import type { Project } from "@/features/projects/types";
-import type { Role } from "@/features/auth/constants";
-
-const AUTOSAVE_KEY = (projectId: string) => `sre.script_draft.${projectId}`;
+import { ApiError } from "@/lib/api-client";
 
 interface Props {
   project: Project;
-  role: Role;
-  isOwner: boolean;
   canInput?: boolean;
-  onProjectUpdated: (p: Project) => void;
+  onProjectUpdated?: (next: Project) => void;
 }
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString();
 }
 
-export function ScriptTab({
-  project,
-  role,
-  isOwner,
-  canInput = true,
-  onProjectUpdated,
-}: Props) {
-  const t = useTranslations("script");
-  const tToast = useTranslations("toast");
-  const tErr = useTranslations("errors");
+export function ScriptTab({ project, canInput = true, onProjectUpdated }: Props) {
+  const { data: session } = useSession();
+  const currentUserId = (session?.user as { id?: string } | undefined)?.id ?? "";
 
-  const locked = project.script_locked_at !== null;
-  // Permission-service-backed gates. All three return `false` until the
-  // permission map loads, hiding the affordances during that brief window
-  // (strictly safer than flashing buttons the user might not have).
-  // `canInput` is the additional "you're the project owner or an active
-  // assignee on the current stage" gate.
-  const canEditAction =
-    useCanIDo(project.department_id, "project.edit") && canInput;
-  const canEdit = canEditAction && !locked && !project.deleted_at;
-  const canLock =
-    useCanIDo(project.department_id, "script_versioning.lock") && canInput;
-  const canUnlock =
-    useCanIDo(project.department_id, "script_versioning.unlock") && canInput;
-
-  const [versions, setVersions] = useState<ScriptVersion[]>([]);
-  const [currentId, setCurrentId] = useState<string | null>(null);
+  const [summary, setSummary] = useState<ScriptSummary | null>(null);
+  const [versions, setVersions] = useState<ScriptVersion[] | null>(null);
   const [draft, setDraft] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [requestDialogOpen, setRequestDialogOpen] = useState(false);
+  const [editingInPlace, setEditingInPlace] = useState(false);
+  const [reloadCounter, setReloadCounter] = useState(0);
 
-  const current = useMemo(
-    () => versions.find((v) => v.id === currentId) ?? null,
-    [versions, currentId],
-  );
-  const isOnLatest = current !== null && current === versions[versions.length - 1];
+  const canEdit =
+    useCanIDo(project.department_id, "project.edit") && canInput;
+  const hasLockPerm =
+    useCanIDo(project.department_id, "script_versioning.lock") && canInput;
+  const isOwner = currentUserId !== "" && currentUserId === project.owner_id;
+  // Lock + Unlock are owner-only — even if CEO/Director hold the
+  // permission, only the script owner decides when the draft is done.
+  const canLock = isOwner && hasLockPerm;
 
-  const reload = useCallback(async () => {
+  async function load() {
     try {
-      const list = await listVersions(project.id);
-      setVersions(list);
-      if (list.length > 0) {
-        setCurrentId((prev) => prev ?? list[list.length - 1].id);
-        // Hydrate draft from latest if no autosave.
-        const cached = typeof window !== "undefined"
-          ? window.localStorage.getItem(AUTOSAVE_KEY(project.id))
-          : null;
-        if (cached === null) {
-          setDraft(list[list.length - 1].body_markdown ?? "");
-        } else {
-          setDraft(cached);
-        }
-      }
+      const [s, vs] = await Promise.all([
+        getScriptSummary(project.id),
+        listVersions(project.id),
+      ]);
+      setSummary(s);
+      setVersions(vs);
+      setReloadCounter((c) => c + 1);
     } catch {
-      toast.error(tErr("generic"));
+      toast.error("Failed to load script");
     }
-  }, [project.id, tErr]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  // Persist draft to localStorage on every change.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (draft) window.localStorage.setItem(AUTOSAVE_KEY(project.id), draft);
-  }, [draft, project.id]);
-
-  async function selectVersion(v: ScriptVersion) {
-    setCurrentId(v.id);
-    setDraft(v.body_markdown ?? "");
   }
 
-  async function saveAsNewVersion() {
-    setSaving(true);
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id]);
+
+  // Edit-in-place mode: owner, script not locked, current version has
+  // no signoffs on it yet. Once a reviewer engages the version, the
+  // next edit becomes a new version.
+  const canEditInPlace =
+    isOwner &&
+    !!summary &&
+    summary.locked_at === null &&
+    summary.latest_version !== null &&
+    summary.latest_version_signoffs.length === 0;
+
+  useEffect(() => {
+    if (!canEditInPlace && editingInPlace) {
+      setEditingInPlace(false);
+    }
+  }, [canEditInPlace, editingInPlace]);
+
+  function startEditInPlace() {
+    if (!summary?.latest_version) return;
+    setDraft(summary.latest_version.body_markdown);
+    setEditingInPlace(true);
+  }
+
+  function cancelEditInPlace() {
+    setEditingInPlace(false);
+    setDraft("");
+  }
+
+  async function handleSaveVersion() {
+    const body = draft.trim();
+    if (!body) {
+      toast.error("Script body cannot be empty");
+      return;
+    }
+    setBusy(true);
     try {
-      const created = await createVersion(project.id, draft);
-      setVersions((prev) => [...prev, created]);
-      setCurrentId(created.id);
-      window.localStorage.removeItem(AUTOSAVE_KEY(project.id));
-      toast.success(tToast("script_saved"));
-      // Stage might have advanced (idea → script_drafting).
-      const refreshed = await getProject(project.id);
-      onProjectUpdated(refreshed);
-    } catch {
-      toast.error(tErr("generic"));
+      await createVersion(project.id, body);
+      toast.success("New script version saved");
+      setDraft("");
+      await load();
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Failed to save version",
+      );
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   }
 
-  async function submit() {
+  async function handleSaveInPlace() {
+    if (!summary?.latest_version) return;
+    const body = draft.trim();
+    if (!body) {
+      toast.error("Script body cannot be empty");
+      return;
+    }
+    setBusy(true);
     try {
-      await submitScript(project.id);
-      const refreshed = await getProject(project.id);
-      onProjectUpdated(refreshed);
-      toast.success(tToast("script_submitted"));
-    } catch {
-      toast.error(tErr("generic"));
+      await updateVersion(project.id, summary.latest_version.id, body);
+      toast.success("Draft saved");
+      setEditingInPlace(false);
+      setDraft("");
+      await load();
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Failed to save draft",
+      );
+    } finally {
+      setBusy(false);
     }
   }
 
-  async function doLock() {
+  async function handleLock() {
+    setBusy(true);
     try {
-      await lockScript(project.id);
-      const refreshed = await getProject(project.id);
-      onProjectUpdated(refreshed);
-      toast.success(tToast("script_locked"));
-    } catch {
-      toast.error(tErr("generic"));
+      const next = await lockScript(project.id);
+      setSummary(next);
+      toast.success("Script locked — project advanced to Casting");
+      onProjectUpdated?.({
+        ...project,
+        stage_key: "casting",
+        script_locked_at: next.locked_at,
+        script_locked_by: next.locked_by,
+      });
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Failed to lock script",
+      );
+    } finally {
+      setBusy(false);
     }
   }
 
-  async function doUnlock() {
+  async function handleUnlock() {
+    setBusy(true);
     try {
-      await unlockScript(project.id);
-      const refreshed = await getProject(project.id);
-      onProjectUpdated(refreshed);
-      toast.success(tToast("script_unlocked"));
-    } catch {
-      toast.error(tErr("generic"));
+      const next = await unlockScript(project.id);
+      setSummary(next);
+      toast.success("Script unlocked — you can edit or save a new version");
+      const stagePatch: Partial<Project> = {
+        script_locked_at: null,
+        script_locked_by: null,
+      };
+      if (project.stage_key === "casting") {
+        stagePatch.stage_key = "script_drafting";
+      }
+      onProjectUpdated?.({ ...project, ...stagePatch });
+    } catch (err) {
+      toast.error(
+        err instanceof ApiError ? err.message : "Failed to unlock script",
+      );
+    } finally {
+      setBusy(false);
     }
   }
+
+  if (summary === null || versions === null) {
+    return <p className="text-muted-foreground text-sm">Loading…</p>;
+  }
+
+  const locked = summary.locked_at !== null;
+  const latest = summary.latest_version;
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-2">
-          <CardTitle className="flex items-center gap-2 text-base">
-            {current ? `${t("version_label")} ${current.version_number}` : t("no_versions")}
-            {locked && <Badge variant="destructive">{t("lock")}</Badge>}
-          </CardTitle>
-          <div className="flex flex-wrap gap-2">
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button variant="outline" size="sm">
-                  {t("version_label")} ({versions.length})
+      <div className="flex items-center justify-end gap-2">
+        {!locked && isOwner && latest ? (
+          <Button
+            variant="outline"
+            onClick={() => setRequestDialogOpen(true)}
+            disabled={busy}
+            title="Pick which CEO/Director members to ping for feedback"
+          >
+            <Send className="size-4" />
+            Request feedback
+          </Button>
+        ) : null}
+        {locked ? (
+          <>
+            <Badge variant="secondary" className="gap-1">
+              <Lock className="size-3" />
+              Script locked
+            </Badge>
+            {isOwner ? (
+              <Button
+                variant="outline"
+                onClick={handleUnlock}
+                disabled={busy}
+                title="Reopen the script so you can edit it or save a new version"
+              >
+                <LockOpen className="size-4" />
+                Unlock script
+              </Button>
+            ) : null}
+          </>
+        ) : canLock ? (
+          <TooltipProvider delayDuration={150}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className={summary.can_lock ? undefined : "cursor-not-allowed"}>
+                  <Button
+                    onClick={handleLock}
+                    disabled={busy || !summary.can_lock}
+                    className={summary.can_lock ? undefined : "pointer-events-none"}
+                  >
+                    <Lock className="size-4" />
+                    Lock script
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {summary.can_lock
+                  ? "Lock the script and advance to Casting"
+                  : summary.latest_version &&
+                      summary.latest_version.submitted_at === null
+                    ? "Send this version for review first (Request feedback)"
+                    : `${summary.pending_reviewer_ids.length} reviewer(s) still need to approve`}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : null}
+      </div>
+
+      {latest ? (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">
+              {editingInPlace
+                ? `Editing V${latest.version_number}`
+                : `Current version (V${latest.version_number})`}
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground text-xs">
+                {formatDate(latest.created_at)}
+              </span>
+              {canEditInPlace && !editingInPlace ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={startEditInPlace}
+                  disabled={busy}
+                  title="Edit the current version in place — no new version is created until you request feedback"
+                >
+                  <Pencil className="size-3" />
+                  Edit draft
                 </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-[360px] sm:w-[480px]">
-                <SheetHeader>
-                  <SheetTitle>{t("version_label")}</SheetTitle>
-                </SheetHeader>
-                <ul className="mt-4 space-y-2">
-                  {versions.length === 0 && (
-                    <p className="text-muted-foreground text-sm">{t("no_versions")}</p>
-                  )}
-                  {versions
-                    .slice()
-                    .reverse()
-                    .map((v) => (
-                      <li key={v.id}>
-                        <button
-                          type="button"
-                          onClick={() => selectVersion(v)}
-                          className={`hover:bg-accent w-full rounded-md border px-3 py-2 text-left text-sm ${
-                            v.id === currentId ? "bg-accent" : ""
-                          }`}
-                        >
-                          <div className="font-medium">
-                            V{v.version_number}
-                            {v.submitted_at && (
-                              <Badge variant="secondary" className="ml-2 text-[10px]">
-                                submitted
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="text-muted-foreground text-xs">
-                            {formatDate(v.created_at)}
-                          </div>
-                        </button>
-                      </li>
-                    ))}
-                </ul>
-              </SheetContent>
-            </Sheet>
-            {canEdit && (
-              <ImportGdocDialog
-                onImported={(body) => {
-                  // Import loads the doc into the editor as an unsaved draft;
-                  // the user clicks "Save new version" to persist (that path
-                  // is also what advances the stage). If they were viewing an
-                  // older version, fast-forward to the latest so the editor
-                  // becomes editable for the new draft.
-                  if (versions.length > 0) {
-                    setCurrentId(versions[versions.length - 1].id);
-                  }
-                  setDraft(body);
-                }}
+              ) : null}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {editingInPlace ? (
+              <>
+                <ScriptEditor
+                  value={draft}
+                  onChange={setDraft}
+                  editable={true}
+                  placeholder="Edit your draft in place. Saving overwrites the current version until you request feedback."
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={handleSaveInPlace}
+                    disabled={
+                      busy ||
+                      !draft.trim() ||
+                      draft === latest.body_markdown
+                    }
+                  >
+                    <Save className="size-4" />
+                    Save changes
+                  </Button>
+                  <ImportGdocDialog
+                    onImported={(body) => setDraft(body)}
+                  />
+                  <Button
+                    variant="ghost"
+                    onClick={cancelEditInPlace}
+                    disabled={busy}
+                  >
+                    <X className="size-4" />
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <ScriptEditor
+                value={latest.body_markdown}
+                onChange={() => {}}
+                editable={false}
+                placeholder=""
               />
             )}
-            {canEdit && (
-              <Button size="sm" onClick={saveAsNewVersion} disabled={saving || !draft.trim()}>
-                <Save className="mr-2 size-4" />
-                {t("save_new_version")}
-              </Button>
-            )}
-            {canEdit && project.stage_key === "script_drafting" && (
-              <Button size="sm" variant="secondary" onClick={submit}>
-                <Send className="mr-2 size-4" />
-                {t("submit_for_review")}
-              </Button>
-            )}
-            {!locked && canLock && versions.length > 0 && (
-              <Button size="sm" variant="outline" onClick={doLock}>
-                <Lock className="mr-2 size-4" />
-                {t("lock")}
-              </Button>
-            )}
-            {locked && canUnlock && (
-              <Button size="sm" variant="outline" onClick={doUnlock}>
-                <LockOpen className="mr-2 size-4" />
-                {t("unlock")}
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {locked && (
-            <p className="text-muted-foreground rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
-              {t("locked_banner")}
-            </p>
-          )}
-          <ScriptEditor
-            value={draft}
-            onChange={setDraft}
-            editable={canEdit && isOnLatest}
-            placeholder={t("compose_placeholder")}
-          />
-          {canEdit && draft && (
-            <p className="text-muted-foreground text-xs">{t("autosave")}</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {current && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t("add_comment")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ScriptComments versionId={current.id} />
+            {!canEditInPlace ? (
+              latest.submitted_at !== null ? (
+                <ScriptSignoffPanel
+                  project={project}
+                  versionId={latest.id}
+                  signoffs={summary.latest_version_signoffs}
+                  currentUserId={currentUserId}
+                  onSignoffAdded={() => void load()}
+                  refreshKey={reloadCounter}
+                />
+              ) : (
+                <p className="text-muted-foreground rounded-md border border-dashed p-3 text-sm">
+                  {isOwner
+                    ? "This version is a draft. Click Request feedback when you're ready to send it for review."
+                    : "The owner is preparing this version. You'll be notified by email when it's ready for review."}
+                </p>
+              )
+            ) : null}
           </CardContent>
         </Card>
-      )}
+      ) : null}
+
+      {!locked && canEdit && isOwner && !latest ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Draft script V1</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <ScriptEditor
+              value={draft}
+              onChange={setDraft}
+              editable={true}
+              placeholder="Sketch the first version of the script here. Import from Google Docs if you've drafted it there."
+            />
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleSaveVersion}
+                disabled={busy || !draft.trim()}
+              >
+                <Save className="size-4" />
+                Save as V1
+              </Button>
+              <ImportGdocDialog onImported={(body) => setDraft(body)} />
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {!locked && canEdit && isOwner && latest && !canEditInPlace ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Draft script V{latest.version_number + 1}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <ScriptEditor
+              value={draft}
+              onChange={setDraft}
+              editable={true}
+              placeholder="Revise based on the feedback above and save a new version…"
+            />
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleSaveVersion}
+                disabled={busy || !draft.trim()}
+              >
+                <Save className="size-4" />
+                Save as V{latest.version_number + 1}
+              </Button>
+              <ImportGdocDialog onImported={(body) => setDraft(body)} />
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {!latest && isOwner ? (
+        <p className="text-muted-foreground text-sm">
+          No script version yet. Save the first draft above to kick off the
+          review loop.
+        </p>
+      ) : !latest ? (
+        <p className="text-muted-foreground text-sm">
+          The project owner hasn&apos;t drafted a script yet.
+        </p>
+      ) : null}
+
+      {versions.length > 1 && isOwner ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Version history</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-1">
+              {versions
+                .slice()
+                .sort((a, b) => b.version_number - a.version_number)
+                .map((v) => (
+                  <ScriptVersionHistoryItem
+                    key={v.id}
+                    projectId={project.id}
+                    version={v}
+                  />
+                ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <ScriptRequestFeedbackDialog
+        project={project}
+        open={requestDialogOpen}
+        onOpenChange={setRequestDialogOpen}
+        onRequested={() => void load()}
+      />
     </div>
   );
 }

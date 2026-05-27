@@ -10,6 +10,7 @@
 const CONTENT_CREATION_ACTIONS: readonly string[] = [
   "script_versioning.lock",
   "script_versioning.unlock",
+  "script_versioning.signoff",
   "asset_review_with_timecodes.approve",
   "asset_review_with_timecodes.request_changes",
   "location.lock",

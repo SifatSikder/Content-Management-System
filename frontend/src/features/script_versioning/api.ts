@@ -1,6 +1,18 @@
 import { apiFetchAuthed } from "@/lib/api-client";
 
-import type { ScriptComment, ScriptVersion } from "./types";
+import type {
+  CreateScriptSignoffBody,
+  ScriptComment,
+  ScriptSignoff,
+  ScriptSummary,
+  ScriptVersion,
+} from "./types";
+
+// ---------- summary + versions ----------
+
+export function getScriptSummary(projectId: string): Promise<ScriptSummary> {
+  return apiFetchAuthed<ScriptSummary>(`/projects/${projectId}/scripts`);
+}
 
 export function listVersions(projectId: string): Promise<ScriptVersion[]> {
   return apiFetchAuthed<ScriptVersion[]>(`/projects/${projectId}/scripts/versions`);
@@ -13,17 +25,88 @@ export function createVersion(projectId: string, body_markdown: string): Promise
   });
 }
 
-export function submitScript(projectId: string): Promise<{ status: string }> {
-  return apiFetchAuthed(`/projects/${projectId}/scripts/submit`, { method: "POST" });
+export function updateVersion(
+  projectId: string,
+  versionId: string,
+  body_markdown: string,
+): Promise<ScriptVersion> {
+  return apiFetchAuthed<ScriptVersion>(
+    `/projects/${projectId}/scripts/versions/${versionId}`,
+    {
+      method: "PATCH",
+      body: { body_markdown } as unknown as BodyInit,
+    },
+  );
 }
 
-export function lockScript(projectId: string): Promise<{ status: string }> {
-  return apiFetchAuthed(`/projects/${projectId}/scripts/lock`, { method: "POST" });
+// ---------- lock / unlock ----------
+
+export function lockScript(projectId: string): Promise<ScriptSummary> {
+  return apiFetchAuthed<ScriptSummary>(`/projects/${projectId}/scripts/lock`, {
+    method: "POST",
+  });
 }
 
-export function unlockScript(projectId: string): Promise<{ status: string }> {
-  return apiFetchAuthed(`/projects/${projectId}/scripts/unlock`, { method: "POST" });
+export function unlockScript(projectId: string): Promise<ScriptSummary> {
+  return apiFetchAuthed<ScriptSummary>(`/projects/${projectId}/scripts/unlock`, {
+    method: "POST",
+  });
 }
+
+// ---------- signoffs ----------
+
+export function listScriptVersionSignoffs(
+  projectId: string,
+  versionId: string,
+): Promise<ScriptSignoff[]> {
+  return apiFetchAuthed<ScriptSignoff[]>(
+    `/projects/${projectId}/scripts/versions/${versionId}/signoffs`,
+  );
+}
+
+export function createScriptSignoff(
+  projectId: string,
+  versionId: string,
+  body: CreateScriptSignoffBody,
+): Promise<ScriptSignoff> {
+  return apiFetchAuthed<ScriptSignoff>(
+    `/projects/${projectId}/scripts/versions/${versionId}/signoffs`,
+    {
+      method: "POST",
+      body: body as unknown as BodyInit,
+    },
+  );
+}
+
+// ---------- request enhancement ----------
+
+export interface ScriptEnhancementCandidate {
+  user_id: string;
+  email: string;
+  name: string;
+  role_key: string;
+  latest_decision: "looks_good" | "needs_changes" | null;
+}
+
+export function listScriptEnhancementCandidates(
+  projectId: string,
+): Promise<{ items: ScriptEnhancementCandidate[] }> {
+  return apiFetchAuthed(
+    `/projects/${projectId}/scripts/enhancement-candidates`,
+  );
+}
+
+export function requestScriptEnhancement(
+  projectId: string,
+  reviewerUserIds: string[],
+): Promise<{ status: string; newly_assigned_user_ids: string[] }> {
+  return apiFetchAuthed(`/projects/${projectId}/scripts/request-enhancement`, {
+    method: "POST",
+    body: { reviewer_user_ids: reviewerUserIds } as unknown as BodyInit,
+  });
+}
+
+// ---------- comments ----------
 
 export function listComments(versionId: string): Promise<ScriptComment[]> {
   return apiFetchAuthed<ScriptComment[]>(`/scripts/versions/${versionId}/comments`);

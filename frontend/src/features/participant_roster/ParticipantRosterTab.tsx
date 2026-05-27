@@ -1,13 +1,9 @@
 "use client";
 
 import { CastingTab } from "@/features/participant_roster/components/CastingTab";
-import type { Project } from "@/features/projects/types";
+import type { ProjectTabProps } from "@/features/projects/lib/projectTabs";
 
 import { LeadsTab } from "./LeadsTab";
-
-interface Props {
-  project: Project;
-}
 
 /**
  * Dispatcher for the participant-roster tab.
@@ -19,9 +15,14 @@ interface Props {
  *
  * The two share the underlying `participants` table + `/cast` route surface
  * — only the visible fields differ.
+ *
+ * Accepts the full `ProjectTabProps` so `isOwner` + `canInput` reach the
+ * downstream tab (otherwise Casting's owner-only gating reads false even
+ * for the project owner).
  */
-export function ParticipantRosterTab({ project }: Props) {
-  const kind = project.department.template_key === "marketing" ? "lead" : "cast";
-  if (kind === "lead") return <LeadsTab project={project} />;
-  return <CastingTab project={project} />;
+export function ParticipantRosterTab(props: ProjectTabProps) {
+  const kind =
+    props.project.department.template_key === "marketing" ? "lead" : "cast";
+  if (kind === "lead") return <LeadsTab project={props.project} />;
+  return <CastingTab {...props} />;
 }

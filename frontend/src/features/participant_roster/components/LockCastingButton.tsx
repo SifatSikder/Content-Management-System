@@ -12,16 +12,19 @@ import { ApiError } from "@/lib/api-client";
 
 interface Props {
   project: Project;
+  isOwner?: boolean;
   onLocked?: () => void;
 }
 
 /**
  * Explicit "Lock Casting" CTA — stamps `projects.casting_locked_at/by`
  * and advances `casting → shoot_schedule`. Renders a static badge once
- * the project has moved past casting.
+ * the project has moved past casting (visible to everyone). The
+ * actionable button is owner-only — even if CEO/Director hold the
+ * permission, only the Asst CEO decides when casting is done.
  */
-export function LockCastingButton({ project, onLocked }: Props) {
-  const canLock = useCanIDo(project.department_id, "casting.lock");
+export function LockCastingButton({ project, isOwner = false, onLocked }: Props) {
+  const canLock = useCanIDo(project.department_id, "casting.lock") && isOwner;
   const [busy, setBusy] = useState(false);
 
   const locked = project.casting_locked_at !== null;

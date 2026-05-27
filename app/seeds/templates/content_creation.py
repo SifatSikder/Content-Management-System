@@ -38,23 +38,18 @@ STAGES: list[dict[str, Any]] = [
         "key": "script_drafting",
         "name_i18n": {"nl": "Script schrijven", "en": "Script drafting"},
         "color": "#60a5fa",
-        # `Lock Idea` advances here. Bounce-back from review for revisions
-        # is also valid.
-        "allowed_from_stage_keys": ["draft_idea", "script_review"],
-    },
-    {
-        "key": "script_review",
-        "name_i18n": {"nl": "Script review", "en": "Script review"},
-        "color": "#38bdf8",
-        "allowed_from_stage_keys": ["script_drafting"],
+        # `Lock Idea` advances here. The separate `script_review` stage
+        # was removed — reviews now happen in-place via signoffs (Request
+        # feedback button) while the card stays on `script_drafting`.
+        "allowed_from_stage_keys": ["draft_idea"],
     },
     {
         "key": "casting",
         "name_i18n": {"nl": "Casting", "en": "Casting"},
         "color": "#f59e0b",
-        # `Lock Script` advances here from drafting *or* review.
-        # Locking is now a project property (`script_locked_at/by`), not a stage.
-        "allowed_from_stage_keys": ["script_drafting", "script_review"],
+        # `Lock Script` advances here. Locking is a project property
+        # (`script_locked_at/by`), not a stage.
+        "allowed_from_stage_keys": ["script_drafting"],
     },
     {
         "key": "shoot_schedule",
@@ -148,10 +143,7 @@ _ROLES: list[dict[str, Any]] = [
 STAGE_TRANSITIONS: list[tuple[str, str]] = [
     ("location_scouting", "draft_idea"),
     ("draft_idea", "script_drafting"),
-    ("script_drafting", "script_review"),
-    ("script_review", "script_drafting"),
     ("script_drafting", "casting"),
-    ("script_review", "casting"),
     ("casting", "shoot_schedule"),
     ("shoot_schedule", "shoot_in_progress"),
     ("shoot_in_progress", "shoot_done"),
@@ -191,6 +183,7 @@ def _build_permissions() -> list[dict[str, Any]]:
         "project.delete",
         "script_versioning.lock",
         "script_versioning.unlock",
+        "script_versioning.signoff",
         "asset_review_with_timecodes.approve",
         "asset_review_with_timecodes.request_changes",
         "location.lock",
@@ -210,6 +203,7 @@ def _build_permissions() -> list[dict[str, Any]]:
         "project.delete",
         "script_versioning.lock",
         "script_versioning.unlock",
+        "script_versioning.signoff",
         "asset_review_with_timecodes.approve",
         "asset_review_with_timecodes.request_changes",
         "location.lock",
@@ -235,6 +229,7 @@ def _build_permissions() -> list[dict[str, Any]]:
     jd_actions = [
         "project.edit",
         "script_versioning.lock",
+        "script_versioning.signoff",
         "asset_review_with_timecodes.request_changes",
         "raw_cut.submit",
         "idea_versioning.signoff",

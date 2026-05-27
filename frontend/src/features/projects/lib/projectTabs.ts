@@ -79,10 +79,10 @@ const CONTENT_CREATION_TABS: TabEntry[] = [
     tabLabelKey: "tab_script",
     name: "Script",
     ProjectTab: ScriptTab,
-    // Asst CEO + Director draft; CEO + Asst CEO lock.
+    // Asst CEO authors, CEO + Director sign off (mirrors Idea).
     requiredAnyOf: [
       "script_versioning.lock",
-      "script_versioning.unlock",
+      "script_versioning.signoff",
       "project.create",
     ],
   },
@@ -141,7 +141,6 @@ const STAGE_TO_TAB_BY_TEMPLATE: Record<string, Record<string, string>> = {
     location_scouting: "location_scouting",
     draft_idea: "idea_versioning",
     script_drafting: "script_versioning",
-    script_review: "script_versioning",
     casting: "participant_roster",
     shoot_schedule: "event_scheduling",
     shoot_in_progress: "event_scheduling",

@@ -37,21 +37,14 @@ const CONTENT_CREATION_STAGES: StageSpec[] = [
     name_i18n: { nl: "Script schrijven", en: "Script drafting" },
     color: "#60a5fa",
     is_terminal: false,
-    allowed_from_stage_keys: ["draft_idea", "script_review"],
-  },
-  {
-    key: "script_review",
-    name_i18n: { nl: "Script review", en: "Script review" },
-    color: "#38bdf8",
-    is_terminal: false,
-    allowed_from_stage_keys: ["script_drafting"],
+    allowed_from_stage_keys: ["draft_idea"],
   },
   {
     key: "casting",
     name_i18n: { nl: "Casting", en: "Casting" },
     color: "#f59e0b",
     is_terminal: false,
-    allowed_from_stage_keys: ["script_drafting", "script_review"],
+    allowed_from_stage_keys: ["script_drafting"],
   },
   {
     key: "shoot_schedule",

@@ -1,13 +1,14 @@
-"""Script + version + comment models.
+"""Script + version + comment + signoff models.
 
 One `ScriptModel` per project (1:1). Each version is immutable once written —
-"editing the script" means creating a new version. Comments hang off a version,
-not the script as a whole, so the threaded discussion is preserved across
-revisions even after a version is locked.
+"editing the script" means creating a new version (mirrors the idea flow).
+Comments hang off a version. Signoffs are per-(version, reviewer) and gate
+the lock action via `script_service.lock_gate_status`.
 """
 
 from __future__ import annotations
 
+import enum
 import uuid
 from datetime import datetime
 
@@ -24,6 +25,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.enums import pg_enum
 
 
 class ScriptModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -119,4 +121,49 @@ class ScriptCommentModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
 
-__all__ = ["ScriptCommentModel", "ScriptModel", "ScriptVersionModel"]
+class ScriptSignoffDecision(enum.StrEnum):
+    LOOKS_GOOD = "looks_good"
+    NEEDS_CHANGES = "needs_changes"
+
+
+class ScriptSignoffModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """One signoff per (version, reviewer). The latest row per
+    (script_version_id, reviewer_id) is authoritative — new signoffs
+    from the same reviewer simply add another row, and queries always
+    order by `created_at DESC LIMIT 1` per reviewer. Mirrors
+    `IdeaSignoffModel`."""
+
+    __tablename__ = "script_signoffs"
+
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("businesses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    script_version_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("script_versions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    reviewer_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    decision: Mapped[ScriptSignoffDecision] = mapped_column(
+        pg_enum(ScriptSignoffDecision, name="script_signoff_decision"),
+        nullable=False,
+    )
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+__all__ = [
+    "ScriptCommentModel",
+    "ScriptModel",
+    "ScriptSignoffDecision",
+    "ScriptSignoffModel",
+    "ScriptVersionModel",
+]

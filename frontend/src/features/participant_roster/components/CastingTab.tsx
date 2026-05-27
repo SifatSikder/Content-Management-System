@@ -42,10 +42,15 @@ const RELEASE_MAX_BYTES = 25 * 1024 * 1024;
 
 interface Props {
   project: Project;
+  isOwner?: boolean;
   canInput?: boolean;
 }
 
-export function CastingTab({ project, canInput = true }: Props) {
+export function CastingTab({ project, isOwner = false }: Props) {
+  // Casting is owner-only — Asst CEO drives this; CEO + Director see
+  // read-only. Mirrors how Idea + Script gate writes on `isOwner`
+  // rather than the broader stage-assignee gate.
+  const canWrite = isOwner;
   const t = useTranslations("casting");
   const tCommon = useTranslations("common");
   const tErr = useTranslations("errors");
@@ -96,9 +101,9 @@ export function CastingTab({ project, canInput = true }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-end">
-        {canInput ? <LockCastingButton project={project} /> : null}
+        <LockCastingButton project={project} isOwner={canWrite} />
       </div>
-      {canInput && (
+      {canWrite && (
       <Card className="p-4">
         <form className="space-y-3" onSubmit={onCreate}>
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -154,7 +159,12 @@ export function CastingTab({ project, canInput = true }: Props) {
       ) : (
         <div className="space-y-3">
           {cast.map((c) => (
-            <CastRow key={c.id} cast={c} onChanged={reload} />
+            <CastRow
+              key={c.id}
+              cast={c}
+              canWrite={canWrite}
+              onChanged={reload}
+            />
           ))}
         </div>
       )}
@@ -162,7 +172,15 @@ export function CastingTab({ project, canInput = true }: Props) {
   );
 }
 
-function CastRow({ cast, onChanged }: { cast: CastMember; onChanged: () => void }) {
+function CastRow({
+  cast,
+  canWrite,
+  onChanged,
+}: {
+  cast: CastMember;
+  canWrite: boolean;
+  onChanged: () => void;
+}) {
   const t = useTranslations("casting");
   const tCommon = useTranslations("common");
   const tErr = useTranslations("errors");
@@ -243,56 +261,64 @@ function CastRow({ cast, onChanged }: { cast: CastMember; onChanged: () => void 
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5">
-            <Switch
-              checked={cast.confirmed}
-              onCheckedChange={toggle}
-              disabled={busy}
-              aria-label={t("confirmed_aria")}
-            />
-            <Label className="text-xs">{t("confirmed_label")}</Label>
-          </div>
-          <ConfirmDialog
-            title={t("delete_confirm")}
-            confirmLabel={tCommon("delete")}
-            onConfirm={onDelete}
-          >
-            <Button
-              variant="ghost"
-              size="icon"
-              disabled={busy}
-              aria-label={tCommon("delete")}
+        {canWrite ? (
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <Switch
+                checked={cast.confirmed}
+                onCheckedChange={toggle}
+                disabled={busy}
+                aria-label={t("confirmed_aria")}
+              />
+              <Label className="text-xs">{t("confirmed_label")}</Label>
+            </div>
+            <ConfirmDialog
+              title={t("delete_confirm")}
+              confirmLabel={tCommon("delete")}
+              onConfirm={onDelete}
             >
-              <Trash2 className="size-4" />
-            </Button>
-          </ConfirmDialog>
-        </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={busy}
+                aria-label={tCommon("delete")}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </ConfirmDialog>
+          </div>
+        ) : cast.confirmed ? (
+          <Badge variant="secondary">{t("confirmed_badge")}</Badge>
+        ) : null}
       </div>
 
       <div className="flex items-end gap-3">
         {cast.release_form_object_name && (
           <ReleaseThumbnail castId={cast.id} castName={cast.name} />
         )}
-        <input
-          ref={fileInput}
-          type="file"
-          accept={RELEASE_ACCEPT}
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) void onUploadRelease(f);
-          }}
-        />
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => fileInput.current?.click()}
-          disabled={busy}
-        >
-          <Upload className="mr-1.5 size-4" />
-          {cast.release_form_object_name ? t("replace_release") : t("upload_release")}
-        </Button>
+        {canWrite ? (
+          <>
+            <input
+              ref={fileInput}
+              type="file"
+              accept={RELEASE_ACCEPT}
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void onUploadRelease(f);
+              }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fileInput.current?.click()}
+              disabled={busy}
+            >
+              <Upload className="mr-1.5 size-4" />
+              {cast.release_form_object_name ? t("replace_release") : t("upload_release")}
+            </Button>
+          </>
+        ) : null}
       </div>
     </Card>
   );
