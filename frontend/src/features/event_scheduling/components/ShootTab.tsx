@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, Play, Square, Trash2, Upload } from "lucide-react";
+import { Calendar, CheckCircle2, Play, Square, Trash2, Upload } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { performResumableUpload } from "@/features/asset_review_with_timecodes/lib/resumable-upload";
 import { SubmitRawCutCTA } from "@/features/asset_review_with_timecodes/components/SubmitRawCutCTA";
 import { CallSheetPreview } from "@/features/event_scheduling/components/CallSheetPreview";
+import { ShootCompleteButton } from "@/features/event_scheduling/components/ShootCompleteButton";
 import { getProject, listStageAssignees } from "@/features/projects/api";
 import type { Project } from "@/features/projects/types";
 import {
@@ -77,7 +78,16 @@ export function ShootTab({ project, onProjectUpdated }: Props) {
   // Shoot management is Director-only — gated on active stage
   // assignment, not on `canInput`. Owner (Asst CEO) + CEO see the tab
   // read-only so they can monitor progress without touching anything.
-  const [canWrite, setCanWrite] = useState(false);
+  // Writes are also locked once the project advances past `shooting`
+  // (the "Shoot complete" CTA fires that advance), so the shoot list
+  // becomes an immutable record from that point.
+  const [isShootingAssignee, setIsShootingAssignee] = useState(false);
+  const shootingPhaseActive = project.stage_key === "shooting";
+  const canWrite = isShootingAssignee && shootingPhaseActive;
+  const shootingCompleted =
+    project.stage_key === "editing" ||
+    project.stage_key === "edit_review" ||
+    project.stage_key === "approved_published";
 
   const reload = useCallback(async () => {
     try {
@@ -99,7 +109,7 @@ export function ShootTab({ project, onProjectUpdated }: Props) {
   useEffect(() => {
     let cancelled = false;
     if (!currentUserId) {
-      setCanWrite(false);
+      setIsShootingAssignee(false);
       return;
     }
     (async () => {
@@ -107,10 +117,12 @@ export function ShootTab({ project, onProjectUpdated }: Props) {
         const res = await listStageAssignees(project.id, "shooting");
         if (cancelled) return;
         // listStageAssignees already filters server-side to active rows.
-        setCanWrite(res.items.some((a) => a.user_id === currentUserId));
+        setIsShootingAssignee(
+          res.items.some((a) => a.user_id === currentUserId),
+        );
       } catch {
         if (cancelled) return;
-        setCanWrite(false);
+        setIsShootingAssignee(false);
       }
     })();
     return () => {
@@ -159,8 +171,33 @@ export function ShootTab({ project, onProjectUpdated }: Props) {
     }
   }
 
+  // Director can complete shooting once at least one shoot is wrapped
+  // and the project is still on `shooting`. The button itself enforces
+  // the dual-check; backend re-validates.
+  const anyWrapped = (shoots ?? []).some((s) => s.status === "wrapped");
+  const showCompleteCTA =
+    project.stage_key === "shooting" && canWrite && anyWrapped;
+
   return (
     <div className="space-y-4">
+      {shootingCompleted ? (
+        <div className="flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-sm">
+          <CheckCircle2 className="text-emerald-500 size-4" />
+          <span className="font-medium">Shooting completed</span>
+          <span className="text-muted-foreground text-xs">
+            — the project has moved to Editing. New raw cuts can&apos;t be
+            uploaded from here.
+          </span>
+        </div>
+      ) : null}
+      {showCompleteCTA ? (
+        <div className="flex items-center justify-end">
+          <ShootCompleteButton
+            projectId={project.id}
+            onCompleted={refreshProject}
+          />
+        </div>
+      ) : null}
       {canWrite && (
       <Card className="p-4">
         <form className="space-y-3" onSubmit={onCreate}>

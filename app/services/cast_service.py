@@ -21,6 +21,7 @@ from app.models.cast_member import CastMemberModel
 from app.models.project import ProjectModel
 from app.models.project_stage_assignment import ProjectStageAssignmentModel
 from app.models.user import UserModel
+from app.config import get_settings
 from app.services import activity_service, email_service, project_service
 
 log = structlog.get_logger(__name__)
@@ -201,7 +202,8 @@ async def _notify_shooting_assignees(
     if not recipients:
         return
 
-    project_url = f"/projects/{project.id}"
+    settings = get_settings()
+    project_url = f"{settings.app_base_url.rstrip('/')}/projects/{project.id}"
     subject = f"Shooting kicked off: {project.title}"
     html = (
         f"<p>{actor.name} locked casting on <strong>{project.title}</strong>. "

@@ -28,6 +28,9 @@ export interface EditComment {
   author_id: string;
   timestamp_seconds: number;
   body: string;
+  /** Null = draft, visible only to the author. The reviewer's "Send
+   *  issues to editor" button stamps it. */
+  sent_at: string | null;
   resolved_at: string | null;
   resolved_by: string | null;
   created_at: string;
@@ -59,4 +62,27 @@ export interface FinaliseEditBody {
 export interface PlaybackUrlResponse {
   url: string;
   expires_in_seconds: number;
+}
+
+export interface EditApproval {
+  id: string;
+  edit_version_id: string;
+  reviewer_id: string;
+  reviewer_name?: string | null;
+  reviewer_avatar_url?: string | null;
+  created_at: string;
+}
+
+export interface EditRequiredReviewer {
+  user_id: string;
+  name: string;
+  avatar_url: string | null;
+  role_label: string;
+}
+
+export interface EditApprovalSummary {
+  required_reviewers: EditRequiredReviewer[];
+  approvals: EditApproval[];
+  can_publish: boolean;
+  pending_reviewer_ids: string[];
 }

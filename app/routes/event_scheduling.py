@@ -14,11 +14,13 @@ from app.auth.dependencies import (
     ProjectAccess,
     SessionDep,
     _user_can_access_project,
+    require_action,
     require_project_access,
 )
 from app.config import get_settings
 from app.models.enums import ShootStatus
 from app.models.project import ProjectModel
+from app.models.project_stage_assignment import ProjectStageAssignmentModel
 from app.models.shoot import ShootModel
 from app.schemas.shoot import (
     ALLOWED_CALL_SHEET_CONTENT_TYPES,
@@ -29,7 +31,7 @@ from app.schemas.shoot import (
     ShootPublic,
     UpdateShootBody,
 )
-from app.services import shoot_service, storage_service
+from app.services import raw_cut_service, shoot_service, storage_service
 from app.services.shoot_service import (
     IllegalShootTransitionError,
     ShootNotFoundError,
@@ -84,6 +86,46 @@ async def get_shoots(
 ) -> list[ShootPublic]:
     shoots = await shoot_service.list_shoots(session, project_id=project.id)
     return [ShootPublic.model_validate(s) for s in shoots]
+
+
+@projects_router.post(
+    "/complete",
+    summary="Mark all shooting complete and advance the project to editing",
+    dependencies=[Depends(require_action("raw_cut.submit"))],
+)
+async def post_complete_shooting(
+    project: Annotated[
+        ProjectModel, Depends(require_project_access(ProjectAccess.VIEW))
+    ],
+    user: CurrentUser,
+    session: SessionDep,
+) -> dict[str, str]:
+    # Director-only — the permission gate above isn't sufficient because
+    # Asst CEO + CEO also hold `raw_cut.submit`. Verify the caller is an
+    # active assignee on the `shooting` stage (Asst CEO isn't, by design
+    # — see `_handoffs.py`).
+    if not user.is_super_admin:
+        assigned = await session.execute(
+            select(ProjectStageAssignmentModel.id)
+            .where(ProjectStageAssignmentModel.project_id == project.id)
+            .where(ProjectStageAssignmentModel.stage_key == "shooting")
+            .where(ProjectStageAssignmentModel.user_id == user.id)
+            .where(ProjectStageAssignmentModel.removed_at.is_(None))
+            .limit(1)
+        )
+        if assigned.first() is None:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Only the assigned director can complete shooting",
+            )
+    try:
+        await raw_cut_service.complete_shooting(
+            session, project=project, actor=user
+        )
+    except raw_cut_service.IllegalShootingCompleteError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await session.commit()
+    return {"status": "completed"}
 
 
 # ---------- instance ----------

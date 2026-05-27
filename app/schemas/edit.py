@@ -67,6 +67,40 @@ class PlaybackUrlResponse(BaseModel):
     expires_in_seconds: int
 
 
+class EditApprovalPublic(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    edit_version_id: uuid.UUID
+    reviewer_id: uuid.UUID
+    # Populated by the list-approvals endpoint so the UI doesn't have
+    # to join against department memberships (super-admin CEO may have
+    # no dept membership row to resolve a name from).
+    reviewer_name: str | None = None
+    reviewer_avatar_url: str | None = None
+    created_at: datetime
+
+
+class EditRequiredReviewer(BaseModel):
+    """Display info for one of the dept's required approvers — so the
+    UI can show their name + role even before they've signed off."""
+
+    user_id: uuid.UUID
+    name: str
+    avatar_url: str | None = None
+    role_label: str
+
+
+class EditApprovalSummary(BaseModel):
+    """Per-version approval state — what the EditsTab needs to render
+    the dual-reviewer signoff panel without an extra round-trip."""
+
+    required_reviewers: list[EditRequiredReviewer]
+    approvals: list[EditApprovalPublic]
+    can_publish: bool
+    pending_reviewer_ids: list[uuid.UUID]
+
+
 class CreateEditCommentBody(BaseModel):
     body: str = Field(min_length=1)
     timestamp_seconds: float = Field(ge=0.0)
@@ -80,6 +114,9 @@ class EditCommentPublic(BaseModel):
     author_id: uuid.UUID
     timestamp_seconds: float
     body: str
+    # `sent_at IS None` = draft visible only to its author. Dispatch
+    # stamps it and the editor + everyone else can see it.
+    sent_at: datetime | None
     resolved_at: datetime | None
     resolved_by: uuid.UUID | None
     created_at: datetime
@@ -91,6 +128,9 @@ __all__ = [
     "MAX_EDIT_SIZE_BYTES",
     "CreateEditBody",
     "CreateEditCommentBody",
+    "EditApprovalPublic",
+    "EditApprovalSummary",
+    "EditRequiredReviewer",
     "EditCommentPublic",
     "EditVersionPublic",
     "InitUploadBody",

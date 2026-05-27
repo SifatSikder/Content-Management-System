@@ -32,6 +32,7 @@ from app.models.script import (
     ScriptVersionModel,
 )
 from app.models.user import UserModel
+from app.config import get_settings
 from app.services import (
     activity_service,
     assignment_service,
@@ -577,7 +578,8 @@ async def request_enhancement(
 
     # Fire-and-forget email notifications. Don't let mail failures roll
     # back the assignment write.
-    project_url = f"/projects/{project.id}"
+    settings = get_settings()
+    project_url = f"{settings.app_base_url.rstrip('/')}/projects/{project.id}"
     subject = f"Script feedback requested: {project.title}"
     html = (
         f"<p>{actor.name} asked for your feedback on the script for "

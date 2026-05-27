@@ -18,13 +18,21 @@ from app.auth.dependencies import (
     require_project_access,
 )
 from app.config import get_settings
+from sqlalchemy import select
+
 from app.models.edit import EditVersionModel
 from app.models.project import ProjectModel
+from app.models.user import UserModel
+from app.models.department_membership import DepartmentMembershipModel
+from app.models.department_role import DepartmentRoleModel
 from app.schemas.edit import (
     ALLOWED_CONTENT_TYPES,
     CreateEditBody,
     CreateEditCommentBody,
+    EditApprovalPublic,
+    EditApprovalSummary,
     EditCommentPublic,
+    EditRequiredReviewer,
     EditVersionPublic,
     InitUploadBody,
     InitUploadResponse,
@@ -36,6 +44,7 @@ from app.services.edit_service import (
     EditCommentNotFoundError,
     EditNotFoundError,
     IllegalEditTransitionError,
+    ProjectFinalisedError,
 )
 
 log = structlog.get_logger(__name__)
@@ -135,17 +144,20 @@ async def post_finalise(
             "Upload not found in storage — finalise after the PUT completes",
         )
 
-    edit = await edit_service.add_edit_version(
-        session,
-        project=project,
-        uploader=user,
-        gcs_bucket=body.gcs_bucket,
-        gcs_object_name=body.gcs_object_name,
-        content_type=body.content_type,
-        size_bytes=body.size_bytes,
-        notes=body.notes,
-        resolved_comments=body.resolved_comments,
-    )
+    try:
+        edit = await edit_service.add_edit_version(
+            session,
+            project=project,
+            uploader=user,
+            gcs_bucket=body.gcs_bucket,
+            gcs_object_name=body.gcs_object_name,
+            content_type=body.content_type,
+            size_bytes=body.size_bytes,
+            notes=body.notes,
+            resolved_comments=body.resolved_comments,
+        )
+    except ProjectFinalisedError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     await session.commit()
     await session.refresh(edit)
     return EditVersionPublic.model_validate(edit)
@@ -256,7 +268,14 @@ async def post_approve(
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, "Insufficient permissions to approve cuts"
         )
-    await edit_service.approve_edit(session, edit=edit, project=project, actor=user)
+    try:
+        await edit_service.approve_edit(
+            session, edit=edit, project=project, actor=user
+        )
+    except IllegalEditTransitionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    except ProjectFinalisedError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     await session.commit()
     await session.refresh(edit)
     return EditVersionPublic.model_validate(edit)
@@ -297,9 +316,121 @@ async def post_request_changes(
         )
     except IllegalEditTransitionError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    except ProjectFinalisedError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     await session.commit()
     await session.refresh(edit)
     return EditVersionPublic.model_validate(edit)
+
+
+@edits_router.get(
+    "/{edit_id}/approvals",
+    response_model=EditApprovalSummary,
+    summary="Get the per-reviewer approval state for one cut",
+)
+async def get_edit_approvals(
+    edit_id: uuid.UUID, user: CurrentUser, session: SessionDep
+) -> EditApprovalSummary:
+    try:
+        edit = await edit_service.get_edit(session, edit_id=edit_id)
+    except EditNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Edit not found") from exc
+    project = await _project_for_edit(session, edit)
+    if not await _user_can_access_project(session, user, project, ProjectAccess.VIEW):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
+    required_ids = await edit_service.required_approver_ids(
+        session, project=project
+    )
+    rows = await edit_service.list_approvals(session, edit_version_id=edit_id)
+    # Resolve display info (name + avatar + role label) for every
+    # required reviewer — including the ones who haven't approved yet,
+    # so the UI can show "Marstark (CEO) · Awaiting" instead of a
+    # generic "Pending reviewer" placeholder. The join goes through
+    # department_memberships → department_roles inside this dept.
+    required_info: list[EditRequiredReviewer] = []
+    if required_ids:
+        info_rows = await session.execute(
+            select(
+                UserModel.id,
+                UserModel.name,
+                UserModel.avatar_url,
+                DepartmentRoleModel.name_i18n,
+                DepartmentRoleModel.key,
+            )
+            .join(
+                DepartmentMembershipModel,
+                DepartmentMembershipModel.user_id == UserModel.id,
+            )
+            .join(
+                DepartmentRoleModel,
+                DepartmentRoleModel.id == DepartmentMembershipModel.role_id,
+            )
+            .where(DepartmentMembershipModel.department_id == project.department_id)
+            .where(UserModel.id.in_(required_ids))
+        )
+        for uid, name, avatar, name_i18n, role_key in info_rows.all():
+            role_label = (name_i18n or {}).get("en") or role_key
+            required_info.append(
+                EditRequiredReviewer(
+                    user_id=uid,
+                    name=name,
+                    avatar_url=avatar,
+                    role_label=role_label,
+                )
+            )
+        # CEO super-admin may have no dept membership row — backfill a
+        # minimal entry from the users table so they still render with
+        # a name (role label falls back to "Approver").
+        present = {r.user_id for r in required_info}
+        missing_ids = [uid for uid in required_ids if uid not in present]
+        if missing_ids:
+            user_rows = await session.execute(
+                select(UserModel.id, UserModel.name, UserModel.avatar_url).where(
+                    UserModel.id.in_(missing_ids)
+                )
+            )
+            for uid, name, avatar in user_rows.all():
+                required_info.append(
+                    EditRequiredReviewer(
+                        user_id=uid,
+                        name=name,
+                        avatar_url=avatar,
+                        role_label="Approver",
+                    )
+                )
+
+    # Index display info by user_id for approval-row enrichment.
+    name_by_id = {r.user_id: (r.name, r.avatar_url) for r in required_info}
+    approvals = [
+        EditApprovalPublic.model_validate(
+            {
+                "id": r.id,
+                "edit_version_id": r.edit_version_id,
+                "reviewer_id": r.reviewer_id,
+                "reviewer_name": (
+                    name_by_id[r.reviewer_id][0]
+                    if r.reviewer_id in name_by_id
+                    else None
+                ),
+                "reviewer_avatar_url": (
+                    name_by_id[r.reviewer_id][1]
+                    if r.reviewer_id in name_by_id
+                    else None
+                ),
+                "created_at": r.created_at,
+            }
+        )
+        for r in rows
+    ]
+    can_publish, pending = await edit_service.approval_gate_status(
+        session, edit=edit, project=project
+    )
+    return EditApprovalSummary(
+        required_reviewers=required_info,
+        approvals=approvals,
+        can_publish=can_publish,
+        pending_reviewer_ids=pending,
+    )
 
 
 # ---------- timestamped comments on a cut ----------
@@ -323,14 +454,17 @@ async def post_edit_comment(
     project = await _project_for_edit(session, edit)
     if not await _user_can_access_project(session, user, project, ProjectAccess.VIEW):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
-    comment = await edit_service.add_edit_comment(
-        session,
-        edit=edit,
-        project=project,
-        author=user,
-        body=body.body,
-        timestamp_seconds=body.timestamp_seconds,
-    )
+    try:
+        comment = await edit_service.add_edit_comment(
+            session,
+            edit=edit,
+            project=project,
+            author=user,
+            body=body.body,
+            timestamp_seconds=body.timestamp_seconds,
+        )
+    except ProjectFinalisedError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     await session.commit()
     await session.refresh(comment)
     return EditCommentPublic.model_validate(comment)
@@ -354,7 +488,40 @@ async def get_edit_comments(
     if not await _user_can_access_project(session, user, project, ProjectAccess.VIEW):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
     comments = await edit_service.list_edit_comments(session, edit_version_id=edit.id)
-    return [EditCommentPublic.model_validate(c) for c in comments]
+    # Hide draft comments (sent_at IS NULL) from everyone except their
+    # author. The author keeps drafting locally without leaking
+    # half-formed feedback to the editor or other reviewers.
+    visible = [
+        c for c in comments
+        if c.sent_at is not None or c.author_id == user.id
+    ]
+    return [EditCommentPublic.model_validate(c) for c in visible]
+
+
+@edits_router.post(
+    "/{edit_id}/dispatch-comments",
+    summary="Send reviewer's draft comments to the editor (stamps sent_at + emails)",
+)
+async def post_dispatch_comments(
+    edit_id: uuid.UUID,
+    user: CurrentUser,
+    session: SessionDep,
+) -> dict[str, object]:
+    try:
+        edit = await edit_service.get_edit(session, edit_id=edit_id)
+    except EditNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Edit not found") from exc
+    project = await _project_for_edit(session, edit)
+    if not await _user_can_access_project(session, user, project, ProjectAccess.VIEW):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
+    try:
+        count = await edit_service.dispatch_comments(
+            session, edit=edit, project=project, reviewer=user
+        )
+    except ProjectFinalisedError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await session.commit()
+    return {"dispatched": count}
 
 
 async def _load_edit_comment_and_project(
@@ -385,9 +552,12 @@ async def post_resolve_edit_comment(
     comment, project = await _load_edit_comment_and_project(session, comment_id)
     if not await _user_can_access_project(session, user, project, ProjectAccess.EDIT):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
-    await edit_service.resolve_edit_comment(
-        session, comment=comment, project=project, actor=user
-    )
+    try:
+        await edit_service.resolve_edit_comment(
+            session, comment=comment, project=project, actor=user
+        )
+    except ProjectFinalisedError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     await session.commit()
     await session.refresh(comment)
     return EditCommentPublic.model_validate(comment)
@@ -406,9 +576,12 @@ async def post_reopen_edit_comment(
     comment, project = await _load_edit_comment_and_project(session, comment_id)
     if not await _user_can_access_project(session, user, project, ProjectAccess.EDIT):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Insufficient project access")
-    await edit_service.reopen_edit_comment(
-        session, comment=comment, project=project, actor=user
-    )
+    try:
+        await edit_service.reopen_edit_comment(
+            session, comment=comment, project=project, actor=user
+        )
+    except ProjectFinalisedError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     await session.commit()
     await session.refresh(comment)
     return EditCommentPublic.model_validate(comment)

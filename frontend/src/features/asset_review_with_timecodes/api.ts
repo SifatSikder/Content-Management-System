@@ -1,6 +1,7 @@
 import { apiFetchAuthed } from "@/lib/api-client";
 
 import type {
+  EditApprovalSummary,
   EditComment,
   EditVersion,
   FinaliseEditBody,
@@ -38,6 +39,10 @@ export function approveEdit(editId: string): Promise<EditVersion> {
   return apiFetchAuthed<EditVersion>(`/edits/${editId}/approve`, { method: "POST" });
 }
 
+export function getEditApprovals(editId: string): Promise<EditApprovalSummary> {
+  return apiFetchAuthed<EditApprovalSummary>(`/edits/${editId}/approvals`);
+}
+
 export function requestChanges(editId: string, notes: string): Promise<EditVersion> {
   return apiFetchAuthed<EditVersion>(`/edits/${editId}/request-changes`, {
     method: "POST",
@@ -70,4 +75,13 @@ export function reopenEditComment(commentId: string): Promise<EditComment> {
   return apiFetchAuthed<EditComment>(`/edits/comments/${commentId}/reopen`, {
     method: "POST",
   });
+}
+
+export function dispatchEditComments(
+  editId: string,
+): Promise<{ dispatched: number }> {
+  return apiFetchAuthed<{ dispatched: number }>(
+    `/edits/${editId}/dispatch-comments`,
+    { method: "POST" },
+  );
 }

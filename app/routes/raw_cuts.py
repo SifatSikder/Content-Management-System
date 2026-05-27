@@ -170,4 +170,51 @@ async def get_raw_cuts(
     return [RawCutPublic.model_validate(r) for r in rows]
 
 
+_RAW_CUT_URL_TTL_SECONDS = 60 * 60  # 1 hour — big files take longer to grab
+
+
+@projects_router.get(
+    "/{raw_cut_id}/url",
+    summary="Get a short-lived signed URL for a raw cut",
+)
+async def get_raw_cut_url(
+    raw_cut_id: uuid.UUID,
+    project: Annotated[
+        ProjectModel, Depends(require_project_access(ProjectAccess.VIEW))
+    ],
+    session: SessionDep,
+    disposition: str = "attachment",
+) -> dict[str, int | str]:
+    """Mint a signed URL for the raw cut. `disposition=attachment`
+    (default) triggers a browser download — editors pull the bytes
+    into their NLE. `disposition=inline` lets the editor preview the
+    file via a `<video>` element before deciding to download."""
+    if disposition not in ("attachment", "inline"):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "disposition must be 'attachment' or 'inline'",
+        )
+    try:
+        row = await raw_cut_service.get_raw_cut(session, raw_cut_id=raw_cut_id)
+    except raw_cut_service.RawCutSubmissionNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Raw cut not found") from exc
+    if row.project_id != project.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Raw cut not found")
+    if disposition == "attachment" and row.original_filename:
+        cd = f'attachment; filename="{row.original_filename}"'
+    else:
+        cd = disposition
+    url = await storage_service.signed_read_url(
+        bucket_name=row.gcs_bucket,
+        object_name=row.gcs_object_name,
+        expires_in_seconds=_RAW_CUT_URL_TTL_SECONDS,
+        response_content_type=row.content_type,
+        response_content_disposition=cd,
+    )
+    return {
+        "url": url,
+        "expires_in_seconds": _RAW_CUT_URL_TTL_SECONDS,
+    }
+
+
 __all__ = ["projects_router"]

@@ -423,6 +423,11 @@
     "import_invalid_url": "Dit lijkt geen Google Docs-URL of ID te zijn"
   },
   "edits": {
+    "cut_versions": "Cut versies",
+    "no_edits_viewer": "Nog geen cuts geüpload — de editor zet hier de eerste versie neer.",
+    "approvals_title": "Goedkeuringen",
+    "project_complete_title": "Project afgerond",
+    "project_complete_hint": "Alle reviewers hebben de definitieve cut goedgekeurd — dit project is nu alleen-lezen.",
     "upload_cv": "Upload nieuwe versie",
     "uploading": "Uploaden…",
     "upload_failed": "Upload mislukt",
@@ -483,6 +488,10 @@
     "verb_location_deleted": "heeft een locatie verwijderd",
     "verb_location_locked": "heeft de locatie vergrendeld",
     "verb_location_unlocked": "heeft de locatie ontgrendeld",
+    "verb_casting_locked": "heeft de casting vergrendeld",
+    "verb_casting_unlocked": "heeft de casting ontgrendeld",
+    "verb_raw_cut_submitted": "heeft een ruwe opname geüpload",
+    "verb_shooting_completed": "heeft de opnames afgerond",
     "verb_location_photo_added": "heeft een locatiefoto toegevoegd",
     "verb_location_photo_deleted": "heeft een locatiefoto verwijderd",
     "verb_cast_created": "heeft een castlid toegevoegd",

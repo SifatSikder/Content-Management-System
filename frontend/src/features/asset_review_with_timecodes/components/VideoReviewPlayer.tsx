@@ -27,6 +27,10 @@ interface Props {
   edit: EditVersion;
   comments: EditComment[];
   onCommentAdded: (c: EditComment) => void;
+  /** False for the editor (who reads comments + uploads new cuts) and
+   *  for anyone viewing a finalised project. Reviewers (CEO + Asst CEO)
+   *  drop comments by clicking the timeline. */
+  canComment?: boolean;
 }
 
 function fmt(seconds: number): string {
@@ -37,7 +41,10 @@ function fmt(seconds: number): string {
 }
 
 export const VideoReviewPlayer = forwardRef<VideoReviewPlayerHandle, Props>(
-  function VideoReviewPlayer({ edit, comments, onCommentAdded }, ref) {
+  function VideoReviewPlayer(
+    { edit, comments, onCommentAdded, canComment = true },
+    ref,
+  ) {
     const t = useTranslations("edits");
     const tToast = useTranslations("toast");
     const tErr = useTranslations("errors");
@@ -73,13 +80,13 @@ export const VideoReviewPlayer = forwardRef<VideoReviewPlayerHandle, Props>(
 
     const onTimelineClick = useCallback(
       (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!duration) return;
+        if (!duration || !canComment) return;
         const rect = e.currentTarget.getBoundingClientRect();
         const pct = (e.clientX - rect.left) / rect.width;
         const target = Math.max(0, Math.min(duration, pct * duration));
         setPopoverTime(target);
       },
-      [duration],
+      [duration, canComment],
     );
 
     async function submitComment() {
@@ -142,7 +149,7 @@ export const VideoReviewPlayer = forwardRef<VideoReviewPlayerHandle, Props>(
                 aria-valuemin={0}
                 aria-valuemax={duration}
                 tabIndex={0}
-                className="bg-muted relative h-2 flex-1 cursor-crosshair overflow-hidden rounded"
+                className={`bg-muted relative h-2 flex-1 overflow-hidden rounded ${canComment ? "cursor-crosshair" : ""}`}
                 onClick={onTimelineClick}
               >
                 <div

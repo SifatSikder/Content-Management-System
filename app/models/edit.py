@@ -108,6 +108,12 @@ class EditCommentModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     timestamp_seconds: Mapped[float] = mapped_column(Float, nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
+    # `sent_at IS NULL` = draft, visible only to the author. Reviewers
+    # collect comments locally and dispatch them as a batch by clicking
+    # "Send issues to editor" — `dispatch_comments` stamps this column.
+    sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     resolved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -118,4 +124,40 @@ class EditCommentModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
 
-__all__ = ["EditCommentModel", "EditVersionModel"]
+class EditApprovalModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """One row per (edit_version, reviewer) approval. A version is
+    fully approved when every required reviewer has a row pointing at
+    it. Mirrors `IdeaSignoffModel` shape but stripped to a simple
+    "approved" semantic — there's no needs_changes here; reviewers use
+    `request_changes` instead, which is a single per-version action.
+    """
+
+    __tablename__ = "edit_approvals"
+    __table_args__ = (
+        UniqueConstraint(
+            "edit_version_id", "reviewer_id", name="uq_edit_approval_reviewer"
+        ),
+    )
+
+    business_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("businesses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    edit_version_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("edit_versions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    reviewer_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+__all__ = ["EditApprovalModel", "EditCommentModel", "EditVersionModel"]

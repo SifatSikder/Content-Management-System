@@ -31,6 +31,7 @@ from app.models.idea_version import (
 from app.models.project import ProjectModel
 from app.models.project_stage_assignment import ProjectStageAssignmentModel
 from app.models.user import UserModel
+from app.config import get_settings
 from app.services import (
     activity_service,
     assignment_service,
@@ -575,7 +576,8 @@ async def request_enhancement(
 
     # Fire-and-forget email notifications. Don't let mail failures roll
     # back the assignment write — the data is the source of truth.
-    project_url = f"/projects/{project.id}"
+    settings = get_settings()
+    project_url = f"{settings.app_base_url.rstrip('/')}/projects/{project.id}"
     subject = f"Feedback requested: {project.title}"
     html = (
         f"<p>{actor.name} asked for your feedback on the draft idea for "

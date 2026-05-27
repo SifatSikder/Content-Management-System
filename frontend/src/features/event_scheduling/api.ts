@@ -77,3 +77,25 @@ export function getCallSheetUrl(shootId: string): Promise<CallSheetUrlResponse> 
     `/shoots/${shootId}/call-sheet/url`,
   );
 }
+
+export function completeShooting(projectId: string): Promise<{ status: string }> {
+  return apiFetchAuthed<{ status: string }>(
+    `/projects/${projectId}/shoots/complete`,
+    { method: "POST" },
+  );
+}
+
+export interface RawCutUrlResponse {
+  url: string;
+  expires_in_seconds: number;
+}
+
+export function getRawCutUrl(
+  projectId: string,
+  rawCutId: string,
+  disposition: "attachment" | "inline" = "attachment",
+): Promise<RawCutUrlResponse> {
+  return apiFetchAuthed<RawCutUrlResponse>(
+    `/projects/${projectId}/raw-cuts/${rawCutId}/url?disposition=${disposition}`,
+  );
+}
