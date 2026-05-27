@@ -5,26 +5,35 @@ import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { useSession } from "next-auth/react";
+
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { performResumableUpload } from "@/features/asset_review_with_timecodes/lib/resumable-upload";
+import { SubmitRawCutCTA } from "@/features/asset_review_with_timecodes/components/SubmitRawCutCTA";
+import { CallSheetPreview } from "@/features/event_scheduling/components/CallSheetPreview";
+import { getProject, listStageAssignees } from "@/features/projects/api";
 import type { Project } from "@/features/projects/types";
 import {
   createShoot,
   deleteShoot,
   finaliseCallSheet,
   initCallSheetUpload,
+  listRawCuts,
   listShoots,
   startShoot,
   updateShoot,
   wrapShoot,
 } from "@/features/event_scheduling/api";
-import type { Shoot, ShootStatus } from "@/features/event_scheduling/types";
+import type {
+  RawCutSubmission,
+  Shoot,
+  ShootStatus,
+} from "@/features/event_scheduling/types";
 import { ApiError } from "@/lib/api-client";
 
 const CALL_SHEET_MAX_BYTES = 25 * 1024 * 1024;
@@ -32,6 +41,7 @@ const CALL_SHEET_MAX_BYTES = 25 * 1024 * 1024;
 interface Props {
   project: Project;
   canInput?: boolean;
+  onProjectUpdated?: (next: Project) => void;
 }
 
 function statusBadgeVariant(s: ShootStatus): "default" | "secondary" | "outline" {
@@ -52,19 +62,31 @@ function parseDateTimeLocal(value: string): string | null {
   return new Date(value).toISOString();
 }
 
-export function ShootTab({ project, canInput = true }: Props) {
+export function ShootTab({ project, onProjectUpdated }: Props) {
   const t = useTranslations("shoots");
   const tCommon = useTranslations("common");
   const tErr = useTranslations("errors");
+  const { data: session } = useSession();
+  const currentUserId =
+    (session?.user as { id?: string } | undefined)?.id ?? "";
 
   const [shoots, setShoots] = useState<Shoot[] | null>(null);
+  const [rawCuts, setRawCuts] = useState<RawCutSubmission[]>([]);
   const [creating, setCreating] = useState(false);
   const [scheduledAt, setScheduledAt] = useState("");
-  const [gearText, setGearText] = useState("");
+  // Shoot management is Director-only — gated on active stage
+  // assignment, not on `canInput`. Owner (Asst CEO) + CEO see the tab
+  // read-only so they can monitor progress without touching anything.
+  const [canWrite, setCanWrite] = useState(false);
 
   const reload = useCallback(async () => {
     try {
-      setShoots(await listShoots(project.id));
+      const [s, rc] = await Promise.all([
+        listShoots(project.id),
+        listRawCuts(project.id).catch(() => [] as RawCutSubmission[]),
+      ]);
+      setShoots(s);
+      setRawCuts(rc);
     } catch {
       toast.error(tErr("generic"));
     }
@@ -74,21 +96,36 @@ export function ShootTab({ project, canInput = true }: Props) {
     void reload();
   }, [reload]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentUserId) {
+      setCanWrite(false);
+      return;
+    }
+    (async () => {
+      try {
+        const res = await listStageAssignees(project.id, "shooting");
+        if (cancelled) return;
+        // listStageAssignees already filters server-side to active rows.
+        setCanWrite(res.items.some((a) => a.user_id === currentUserId));
+      } catch {
+        if (cancelled) return;
+        setCanWrite(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [project.id, currentUserId]);
+
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
     setCreating(true);
     try {
-      const gear: Record<string, boolean> = {};
-      for (const raw of gearText.split("\n")) {
-        const item = raw.trim();
-        if (item) gear[item] = false;
-      }
       await createShoot(project.id, {
         scheduled_at: parseDateTimeLocal(scheduledAt),
-        gear_checklist: gear,
       });
       setScheduledAt("");
-      setGearText("");
       toast.success(t("created"));
       await reload();
     } catch (err) {
@@ -99,9 +136,32 @@ export function ShootTab({ project, canInput = true }: Props) {
     }
   }
 
+  function onShootWrapped() {
+    toast.success(t("wrapped_prompt_upload"));
+  }
+
+  // Pre-compute per-shoot raw cuts so each row reads from local memory.
+  const cutsByShoot = new Map<string, RawCutSubmission[]>();
+  for (const cut of rawCuts) {
+    if (cut.shoot_id === null) continue;
+    const list = cutsByShoot.get(cut.shoot_id) ?? [];
+    list.push(cut);
+    cutsByShoot.set(cut.shoot_id, list);
+  }
+
+  async function refreshProject() {
+    if (!onProjectUpdated) return;
+    try {
+      const next = await getProject(project.id);
+      onProjectUpdated(next);
+    } catch {
+      // non-fatal — page chip will catch up on next nav
+    }
+  }
+
   return (
     <div className="space-y-4">
-      {canInput && (
+      {canWrite && (
       <Card className="p-4">
         <form className="space-y-3" onSubmit={onCreate}>
           <div className="space-y-1.5">
@@ -112,17 +172,6 @@ export function ShootTab({ project, canInput = true }: Props) {
               value={scheduledAt}
               onChange={(e) => setScheduledAt(e.target.value)}
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="shoot-gear">{t("gear_checklist")}</Label>
-            <Textarea
-              id="shoot-gear"
-              rows={4}
-              value={gearText}
-              onChange={(e) => setGearText(e.target.value)}
-              placeholder={t("gear_placeholder")}
-            />
-            <p className="text-muted-foreground text-xs">{t("gear_hint")}</p>
           </div>
           <Button type="submit" size="sm" disabled={creating}>
             {creating ? tCommon("loading") : t("add")}
@@ -138,7 +187,16 @@ export function ShootTab({ project, canInput = true }: Props) {
       ) : (
         <div className="space-y-3">
           {shoots.map((s) => (
-            <ShootRow key={s.id} shoot={s} onChanged={reload} />
+            <ShootRow
+              key={s.id}
+              project={project}
+              shoot={s}
+              rawCuts={cutsByShoot.get(s.id) ?? []}
+              canWrite={canWrite}
+              onChanged={reload}
+              onWrapped={onShootWrapped}
+              onProjectStageMayChange={refreshProject}
+            />
           ))}
         </div>
       )}
@@ -146,7 +204,30 @@ export function ShootTab({ project, canInput = true }: Props) {
   );
 }
 
-function ShootRow({ shoot, onChanged }: { shoot: Shoot; onChanged: () => void }) {
+function formatBytes(bytes: number | null): string {
+  if (bytes === null) return "";
+  const mb = bytes / 1024 / 1024;
+  if (mb < 1024) return `${mb.toFixed(1)} MB`;
+  return `${(mb / 1024).toFixed(2)} GB`;
+}
+
+function ShootRow({
+  project,
+  shoot,
+  rawCuts,
+  canWrite,
+  onChanged,
+  onWrapped,
+  onProjectStageMayChange,
+}: {
+  project: Project;
+  shoot: Shoot;
+  rawCuts: RawCutSubmission[];
+  canWrite: boolean;
+  onChanged: () => void;
+  onWrapped?: () => void;
+  onProjectStageMayChange?: () => Promise<void>;
+}) {
   const t = useTranslations("shoots");
   const tCommon = useTranslations("common");
   const tErr = useTranslations("errors");
@@ -197,7 +278,6 @@ function ShootRow({ shoot, onChanged }: { shoot: Shoot; onChanged: () => void })
     }
   }
 
-  const gearEntries = Object.entries(shoot.gear_checklist ?? {});
   const formatted =
     shoot.scheduled_at !== null
       ? new Date(shoot.scheduled_at).toLocaleString(undefined, {
@@ -206,9 +286,18 @@ function ShootRow({ shoot, onChanged }: { shoot: Shoot; onChanged: () => void })
         })
       : t("no_date");
 
-  async function toggleGear(item: string, value: boolean) {
-    const next = { ...shoot.gear_checklist, [item]: value };
-    await action(() => updateShoot(shoot.id, { gear_checklist: next }));
+  async function handleWrap() {
+    setBusy(true);
+    try {
+      await wrapShoot(shoot.id);
+      onChanged();
+      onWrapped?.();
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : tErr("generic");
+      toast.error(msg);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -231,89 +320,124 @@ function ShootRow({ shoot, onChanged }: { shoot: Shoot; onChanged: () => void })
             </p>
           )}
         </div>
-        <div className="flex items-center gap-1">
-          {shoot.status === "scheduled" && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => action(() => startShoot(shoot.id), "started_toast")}
-              disabled={busy}
+        {canWrite ? (
+          <div className="flex items-center gap-1">
+            {shoot.status === "scheduled" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => action(() => startShoot(shoot.id), "started_toast")}
+                disabled={busy}
+              >
+                <Play className="mr-1.5 size-3.5" />
+                {t("start")}
+              </Button>
+            )}
+            {shoot.status === "in_progress" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleWrap}
+                disabled={busy}
+              >
+                <Square className="mr-1.5 size-3.5" />
+                {t("wrap")}
+              </Button>
+            )}
+            <ConfirmDialog
+              title={t("delete_confirm")}
+              confirmLabel={tCommon("delete")}
+              onConfirm={() => action(() => deleteShoot(shoot.id))}
             >
-              <Play className="mr-1.5 size-3.5" />
-              {t("start")}
-            </Button>
-          )}
-          {shoot.status === "in_progress" && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => action(() => wrapShoot(shoot.id), "wrapped_toast")}
-              disabled={busy}
-            >
-              <Square className="mr-1.5 size-3.5" />
-              {t("wrap")}
-            </Button>
-          )}
-          <ConfirmDialog
-            title={t("delete_confirm")}
-            confirmLabel={tCommon("delete")}
-            onConfirm={() => action(() => deleteShoot(shoot.id))}
-          >
-            <Button
-              variant="ghost"
-              size="icon"
-              disabled={busy}
-              aria-label={tCommon("delete")}
-            >
-              <Trash2 className="size-4" />
-            </Button>
-          </ConfirmDialog>
-        </div>
-      </div>
-
-      {gearEntries.length > 0 && (
-        <div className="space-y-1.5">
-          <p className="text-muted-foreground text-xs font-medium uppercase tracking-wider">
-            {t("gear_checklist")}
-          </p>
-          <div className="grid grid-cols-1 gap-1.5 md:grid-cols-2">
-            {gearEntries.map(([item, value]) => (
-              <label key={item} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={Boolean(value)}
-                  onChange={(e) => toggleGear(item, e.target.checked)}
-                  disabled={busy || shoot.status === "wrapped"}
-                  className="size-4 rounded border-input"
-                />
-                <span className={value ? "text-muted-foreground line-through" : ""}>{item}</span>
-              </label>
-            ))}
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={busy}
+                aria-label={tCommon("delete")}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </ConfirmDialog>
           </div>
-        </div>
-      )}
-
-      <div>
-        <input
-          ref={fileInput}
-          type="file"
-          accept="application/pdf"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) void onUploadCallSheet(f);
-          }}
-        />
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => fileInput.current?.click()}
-          disabled={busy}
-        >
-          <Upload className="mr-1.5 size-4" />
-          {shoot.call_sheet_object_name ? t("replace_call_sheet") : t("upload_call_sheet")}
-        </Button>
+        ) : null}
       </div>
+
+      {shoot.call_sheet_object_name || canWrite ? (
+        <div className="flex items-end gap-3">
+          {shoot.call_sheet_object_name ? (
+            <CallSheetPreview shootId={shoot.id} shootLabel={formatted} />
+          ) : null}
+          {canWrite ? (
+            <>
+              <input
+                ref={fileInput}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void onUploadCallSheet(f);
+                }}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInput.current?.click()}
+                disabled={busy}
+              >
+                <Upload className="mr-1.5 size-4" />
+                {shoot.call_sheet_object_name
+                  ? t("replace_call_sheet")
+                  : t("upload_call_sheet")}
+              </Button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
+      {shoot.status === "wrapped" ? (
+        <div className="space-y-2 border-t pt-3">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            {t("raw_cuts_title")}
+          </p>
+          {rawCuts.length === 0 ? (
+            <p className="text-muted-foreground text-xs">
+              {t("raw_cuts_empty")}
+            </p>
+          ) : (
+            <ul className="space-y-1">
+              {rawCuts
+                .slice()
+                .sort((a, b) =>
+                  a.submitted_at < b.submitted_at ? 1 : -1,
+                )
+                .map((rc) => (
+                  <li
+                    key={rc.id}
+                    className="bg-muted/40 flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs"
+                  >
+                    <span className="truncate">
+                      {rc.original_filename ?? rc.gcs_object_name}
+                    </span>
+                    <span className="text-muted-foreground shrink-0">
+                      {formatBytes(rc.byte_size)}
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          )}
+          {canWrite ? (
+            <SubmitRawCutCTA
+              project={project}
+              shootId={shoot.id}
+              onSubmitted={async () => {
+                onChanged();
+                await onProjectStageMayChange?.();
+              }}
+            />
+          ) : null}
+        </div>
+      ) : null}
     </Card>
   );
 }

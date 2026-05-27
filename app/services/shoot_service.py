@@ -10,7 +10,6 @@ from __future__ import annotations
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,13 +54,11 @@ async def create_shoot(
     project: ProjectModel,
     actor: UserModel,
     scheduled_at: datetime | None,
-    gear_checklist: dict[str, Any],
 ) -> ShootModel:
     shoot = ShootModel(
         business_id=project.business_id,
         project_id=project.id,
         scheduled_at=scheduled_at,
-        gear_checklist_json=gear_checklist,
     )
     session.add(shoot)
     await session.flush()
@@ -103,15 +100,11 @@ async def update_shoot(
     shoot: ShootModel,
     actor: UserModel,
     scheduled_at: datetime | None = None,
-    gear_checklist: dict[str, Any] | None = None,
 ) -> ShootModel:
     changed: list[str] = []
     if scheduled_at is not None and shoot.scheduled_at != scheduled_at:
         shoot.scheduled_at = scheduled_at
         changed.append("scheduled_at")
-    if gear_checklist is not None and shoot.gear_checklist_json != gear_checklist:
-        shoot.gear_checklist_json = gear_checklist
-        changed.append("gear_checklist")
     if changed:
         await activity_service.record(
             session,
@@ -173,19 +166,11 @@ async def transition_shoot(
         },
     )
 
-    # Starting a shoot moves the project from shoot_schedule → shoot_in_progress.
-    if target == ShootStatus.IN_PROGRESS and project.stage_key == "shoot_schedule":
-        await _advance_stage(
-            session, project=project, target_key="shoot_in_progress", actor_id=actor.id
-        )
-    # Wrapping a shoot moves the project from shoot_in_progress → shoot_done.
-    elif target == ShootStatus.WRAPPED and project.stage_key in (
-        "shoot_in_progress",
-        "shoot_schedule",
-    ):
-        await _advance_stage(
-            session, project=project, target_key="shoot_done", actor_id=actor.id
-        )
+    # Shoot stages collapsed to a single `shooting` stage — the project
+    # stays there from `Lock Casting` until raw cuts are uploaded
+    # (`raw_cut_service.submit_raw_cut` advances to `editing`). Shoot
+    # status (`SCHEDULED → IN_PROGRESS → WRAPPED`) is now an attribute
+    # of each individual shoot, not a project-stage signal.
 
     return shoot
 

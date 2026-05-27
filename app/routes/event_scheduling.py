@@ -6,7 +6,7 @@ import uuid
 from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 
 from app.auth.dependencies import (
@@ -45,6 +45,9 @@ def _call_sheet_object_name(project_id: uuid.UUID, shoot_id: uuid.UUID) -> str:
     return f"projects/{project_id}/shoots/{shoot_id}/call_sheet_{uuid.uuid4()}.pdf"
 
 
+_CALL_SHEET_URL_TTL_SECONDS = 15 * 60
+
+
 # ---------- collection ----------
 
 @projects_router.post(
@@ -64,7 +67,6 @@ async def post_shoot(
         project=project,
         actor=user,
         scheduled_at=body.scheduled_at,
-        gear_checklist=body.gear_checklist,
     )
     await session.commit()
     await session.refresh(shoot)
@@ -137,7 +139,6 @@ async def patch_shoot(
         shoot=shoot,
         actor=user,
         scheduled_at=body.scheduled_at,
-        gear_checklist=body.gear_checklist,
     )
     await session.commit()
     await session.refresh(shoot)
@@ -213,6 +214,7 @@ async def post_init_call_sheet_upload(
     body: InitCallSheetUploadBody,
     user: CurrentUser,
     session: SessionDep,
+    request: Request,
 ) -> InitCallSheetUploadResponse:
     if body.content_type not in ALLOWED_CALL_SHEET_CONTENT_TYPES:
         raise HTTPException(
@@ -223,11 +225,18 @@ async def post_init_call_sheet_upload(
     settings = get_settings()
     bucket = settings.gcs_bucket_assets
     object_name = _call_sheet_object_name(project.id, shoot.id)
+    # Pass the request's Origin through so GCS binds the resumable
+    # session to it and echoes Access-Control-Allow-Origin on the PUT
+    # response. Without this the bytes land but the browser rejects
+    # the response for missing CORS headers (same pattern as location
+    # photo + raw-cut uploads).
+    origin = request.headers.get("origin")
     session_url = await storage_service.create_resumable_upload_session(
         bucket_name=bucket,
         object_name=object_name,
         content_type=body.content_type,
         size_bytes=body.size_bytes,
+        origin=origin,
     )
     return InitCallSheetUploadResponse(
         upload_session_url=session_url, gcs_bucket=bucket, gcs_object_name=object_name
@@ -259,6 +268,33 @@ async def post_finalise_call_sheet(
     await session.commit()
     await session.refresh(shoot)
     return ShootPublic.model_validate(shoot)
+
+
+@shoots_router.get(
+    "/{shoot_id}/call-sheet/url",
+    summary="Get a short-lived signed read URL for a shoot's call sheet",
+)
+async def get_call_sheet_url(
+    shoot_id: uuid.UUID, user: CurrentUser, session: SessionDep
+) -> dict[str, int | str]:
+    shoot, _ = await _load_shoot_and_project(session, shoot_id, user, ProjectAccess.VIEW)
+    if shoot.call_sheet_object_name is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No call sheet on file")
+    settings = get_settings()
+    url = await storage_service.signed_read_url(
+        bucket_name=settings.gcs_bucket_assets,
+        object_name=shoot.call_sheet_object_name,
+        expires_in_seconds=_CALL_SHEET_URL_TTL_SECONDS,
+        # Force inline rendering so Chrome shows the PDF in an iframe
+        # rather than downloading — same trick as cast release forms.
+        response_content_type="application/pdf",
+        response_content_disposition="inline",
+    )
+    return {
+        "url": url,
+        "content_type": "application/pdf",
+        "expires_in_seconds": _CALL_SHEET_URL_TTL_SECONDS,
+    }
 
 
 __all__ = ["projects_router", "shoots_router"]

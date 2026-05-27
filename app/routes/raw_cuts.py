@@ -1,5 +1,5 @@
 """Raw-cut submission endpoints — director uploads source material at the
-end of `shoot_done`. First submission advances the project to `editing`."""
+end of `shooting`. First submission advances the project to `editing`."""
 
 from __future__ import annotations
 
@@ -16,8 +16,11 @@ from app.auth.dependencies import (
     require_action,
     require_project_access,
 )
+from sqlalchemy import select
+
 from app.config import get_settings
 from app.models.project import ProjectModel
+from app.models.shoot import ShootModel
 from app.schemas.raw_cut import (
     ALLOWED_RAW_CUT_CONTENT_TYPES,
     FinaliseRawCutBody,
@@ -41,9 +44,27 @@ _EXTENSIONS = {
 }
 
 
-def _new_object_name(project_id: uuid.UUID, content_type: str) -> str:
+def _new_object_name(
+    project_id: uuid.UUID, shoot_id: uuid.UUID, content_type: str
+) -> str:
     ext = _EXTENSIONS.get(content_type, "bin")
-    return f"projects/{project_id}/raw-cuts/{uuid.uuid4()}.{ext}"
+    return (
+        f"projects/{project_id}/shoots/{shoot_id}/raw-cuts/{uuid.uuid4()}.{ext}"
+    )
+
+
+async def _ensure_shoot_in_project(
+    session: SessionDep, *, project_id: uuid.UUID, shoot_id: uuid.UUID
+) -> None:
+    row = await session.execute(
+        select(ShootModel.id).where(
+            ShootModel.id == shoot_id, ShootModel.project_id == project_id
+        )
+    )
+    if row.first() is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "Shoot not found on this project"
+        )
 
 
 @projects_router.post(
@@ -58,15 +79,19 @@ async def post_init_upload(
         ProjectModel, Depends(require_project_access(ProjectAccess.EDIT))
     ],
     request: Request,
+    session: SessionDep,
 ) -> InitRawCutUploadResponse:
     if body.content_type not in ALLOWED_RAW_CUT_CONTENT_TYPES:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             f"Content type {body.content_type!r} not allowed",
         )
+    await _ensure_shoot_in_project(
+        session, project_id=project.id, shoot_id=body.shoot_id
+    )
     settings = get_settings()
     bucket = settings.gcs_bucket_video
-    object_name = _new_object_name(project.id, body.content_type)
+    object_name = _new_object_name(project.id, body.shoot_id, body.content_type)
     origin = request.headers.get("origin")
     session_url = await storage_service.create_resumable_upload_session(
         bucket_name=bucket,
@@ -111,9 +136,13 @@ async def post_finalise(
             status.HTTP_400_BAD_REQUEST,
             "Upload not found in storage — finalise after the PUT completes",
         )
+    await _ensure_shoot_in_project(
+        session, project_id=project.id, shoot_id=body.shoot_id
+    )
     row = await raw_cut_service.submit_raw_cut(
         session,
         project=project,
+        shoot_id=body.shoot_id,
         uploader=user,
         gcs_bucket=body.gcs_bucket,
         gcs_object_name=body.gcs_object_name,

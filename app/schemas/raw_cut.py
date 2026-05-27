@@ -21,6 +21,7 @@ MAX_RAW_CUT_SIZE_BYTES: int = 5 * 1024 * 1024 * 1024  # 5 GB
 
 
 class InitRawCutUploadBody(BaseModel):
+    shoot_id: uuid.UUID
     content_type: str = Field(min_length=1, max_length=64)
     size_bytes: int = Field(gt=0, le=MAX_RAW_CUT_SIZE_BYTES)
     filename: str | None = Field(default=None, max_length=255)
@@ -34,6 +35,7 @@ class InitRawCutUploadResponse(BaseModel):
 
 
 class FinaliseRawCutBody(BaseModel):
+    shoot_id: uuid.UUID
     gcs_bucket: str = Field(min_length=1, max_length=128)
     gcs_object_name: str = Field(min_length=1, max_length=512)
     content_type: str | None = Field(default=None, max_length=64)
@@ -46,6 +48,7 @@ class RawCutPublic(BaseModel):
 
     id: uuid.UUID
     project_id: uuid.UUID
+    shoot_id: uuid.UUID | None
     uploader_id: uuid.UUID
     uploader: OwnerPublic
     gcs_bucket: str

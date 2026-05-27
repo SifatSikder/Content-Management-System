@@ -5,6 +5,7 @@ import type {
   FinaliseCallSheetBody,
   InitCallSheetUploadBody,
   InitCallSheetUploadResponse,
+  RawCutSubmission,
   Shoot,
   UpdateShootBody,
 } from "./types";
@@ -57,4 +58,22 @@ export function finaliseCallSheet(
     method: "POST",
     body: body as unknown as BodyInit,
   });
+}
+
+export function listRawCuts(projectId: string): Promise<RawCutSubmission[]> {
+  return apiFetchAuthed<RawCutSubmission[]>(
+    `/projects/${projectId}/raw-cuts`,
+  );
+}
+
+export interface CallSheetUrlResponse {
+  url: string;
+  content_type: string;
+  expires_in_seconds: number;
+}
+
+export function getCallSheetUrl(shootId: string): Promise<CallSheetUrlResponse> {
+  return apiFetchAuthed<CallSheetUrlResponse>(
+    `/shoots/${shootId}/call-sheet/url`,
+  );
 }

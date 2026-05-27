@@ -1,7 +1,7 @@
-"""Raw-cut submissions uploaded by the director at the end of `shoot_done`.
+"""Raw-cut submissions uploaded by the director at the end of `shooting`.
 
 Multiple rows per project are allowed (one per file). The first row inserted
-auto-advances the project from `shoot_done` to `editing`, so the editor can
+auto-advances the project from `shooting` to `editing`, so the editor can
 pick the cuts up and start the cut. Editor's polished cuts live on
 `edit_versions` (`app/models/edit.py`) — raw_cut_submissions are strictly
 director-uploaded source material, not reviewable cuts.
@@ -33,6 +33,15 @@ class RawCutSubmissionModel(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         PG_UUID(as_uuid=True),
         ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
+    )
+    # Per-shoot grouping. Nullable for legacy data (project-level
+    # submissions made before the per-shoot rework); new rows always
+    # carry a shoot_id, enforced at the route layer.
+    shoot_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("shoots.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
     uploader_id: Mapped[uuid.UUID] = mapped_column(

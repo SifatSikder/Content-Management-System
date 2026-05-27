@@ -30,7 +30,6 @@ import {
   requestChanges,
 } from "@/features/asset_review_with_timecodes/api";
 import { EditCommentsList } from "@/features/asset_review_with_timecodes/components/EditCommentsList";
-import { SubmitRawCutCTA } from "@/features/asset_review_with_timecodes/components/SubmitRawCutCTA";
 import { UploadDialog } from "@/features/asset_review_with_timecodes/components/UploadDialog";
 import {
   VideoReviewPlayer,
@@ -158,19 +157,6 @@ export function EditsTab({
 
   return (
     <div className="space-y-4">
-      {project.stage_key === "shoot_done" && canInput ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Submit raw cuts</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <SubmitRawCutCTA
-              project={project}
-              onSubmitted={() => void refreshProject()}
-            />
-          </CardContent>
-        </Card>
-      ) : null}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-base">{t("upload_cv")}</CardTitle>

@@ -119,7 +119,7 @@ async def post_lock_casting(
 
 @projects_router.post(
     "/unlock",
-    summary="Clear the casting lock (owner-only) and roll the stage back from shoot_schedule if applicable",
+    summary="Clear the casting lock (owner-only) and roll the stage back from shooting if applicable",
     dependencies=[Depends(require_action("casting.lock"))],
 )
 async def post_unlock_casting(

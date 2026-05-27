@@ -1,5 +1,6 @@
-"""Raw-cut submission service — director uploads the raw cuts at end of
-`shoot_done`, the first submission auto-advances the project to `editing`."""
+"""Raw-cut submission service — director uploads the raw cuts at the end
+of `shooting`, the first submission auto-advances the project to
+`editing` so the editor can pick them up."""
 
 from __future__ import annotations
 
@@ -28,6 +29,7 @@ async def submit_raw_cut(
     session: AsyncSession,
     *,
     project: ProjectModel,
+    shoot_id: uuid.UUID,
     uploader: UserModel,
     gcs_bucket: str,
     gcs_object_name: str,
@@ -38,6 +40,7 @@ async def submit_raw_cut(
     row = RawCutSubmissionModel(
         business_id=project.business_id,
         project_id=project.id,
+        shoot_id=shoot_id,
         uploader_id=uploader.id,
         gcs_bucket=gcs_bucket,
         gcs_object_name=gcs_object_name,
@@ -49,9 +52,9 @@ async def submit_raw_cut(
     session.add(row)
     await session.flush()
 
-    # First submission of raw cuts pushes the project from shoot_done → editing
-    # so the editor can pick them up. No-op if already past shoot_done.
-    if project.stage_key == "shoot_done":
+    # First submission of raw cuts pushes the project from shooting →
+    # editing so the editor can pick them up. No-op if already past.
+    if project.stage_key == "shooting":
         await project_service.auto_bump_stage(
             session, project=project, target_key="editing", actor_id=uploader.id
         )

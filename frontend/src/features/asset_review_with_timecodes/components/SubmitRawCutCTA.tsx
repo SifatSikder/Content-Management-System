@@ -23,16 +23,17 @@ const ACCEPT = ".mp4,.mov,.avi,video/*";
 
 interface Props {
   project: Project;
+  shootId: string;
   onSubmitted?: () => void;
 }
 
 /**
- * "Submit raw cuts" CTA for the Shoots / Edits surface during `shoot_done`.
+ * "Submit raw cuts" CTA rendered per-shoot inside a wrapped ShootRow.
  * Streams a file straight to GCS via the resumable-upload helper, then
  * finalises through the FastAPI route which advances the project to
- * `editing`.
+ * `editing` on the first submission for the project.
  */
-export function SubmitRawCutCTA({ project, onSubmitted }: Props) {
+export function SubmitRawCutCTA({ project, shootId, onSubmitted }: Props) {
   const canSubmit = useCanIDo(project.department_id, "raw_cut.submit");
   const [progress, setProgress] = useState<{ uploaded: number; total: number } | null>(
     null,
@@ -40,7 +41,8 @@ export function SubmitRawCutCTA({ project, onSubmitted }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   if (!canSubmit) return null;
-  if (project.stage_key !== "shoot_done") return null;
+  if (project.stage_key !== "shooting" && project.stage_key !== "editing")
+    return null;
 
   async function handleFile(file: File) {
     const contentType = file.type || "application/octet-stream";
@@ -55,6 +57,7 @@ export function SubmitRawCutCTA({ project, onSubmitted }: Props) {
         {
           method: "POST",
           body: {
+            shoot_id: shootId,
             content_type: contentType,
             size_bytes: file.size,
             filename: file.name,
@@ -72,6 +75,7 @@ export function SubmitRawCutCTA({ project, onSubmitted }: Props) {
       await apiFetchAuthed(`/projects/${project.id}/raw-cuts`, {
         method: "POST",
         body: {
+          shoot_id: shootId,
           gcs_bucket: init.gcs_bucket,
           gcs_object_name: init.gcs_object_name,
           content_type: contentType,

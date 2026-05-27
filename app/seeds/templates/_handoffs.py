@@ -30,11 +30,12 @@ CONTENT_CREATION_DEFAULT_HANDOFFS: list[StageHandoff] = [
     # is ready for feedback — they're notified by email at that point.
     {"stage_key": "draft_idea", "role_keys": ["assistant_director"]},
     {"stage_key": "script_drafting", "role_keys": ["assistant_director"]},
-    {"stage_key": "script_review", "role_keys": ["assistant_director", "ceo"]},
     {"stage_key": "casting", "role_keys": ["assistant_director"]},
-    {"stage_key": "shoot_schedule", "role_keys": ["junior_director"]},
-    {"stage_key": "shoot_in_progress", "role_keys": ["junior_director"]},
-    {"stage_key": "shoot_done", "role_keys": ["junior_director"]},
+    # `Lock Casting` advances to `shooting` and auto-assigns the
+    # director(s). They get an email at that point — see
+    # `cast_service.lock_casting`. Both legacy and renamed role keys
+    # are listed so departments running either still wire up correctly.
+    {"stage_key": "shooting", "role_keys": ["junior_director", "director"]},
     {"stage_key": "editing", "role_keys": ["editor"]},
     {"stage_key": "edit_review", "role_keys": ["assistant_director", "ceo"]},
     # approved_published is terminal — no handoff.

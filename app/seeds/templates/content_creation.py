@@ -52,32 +52,21 @@ STAGES: list[dict[str, Any]] = [
         "allowed_from_stage_keys": ["script_drafting"],
     },
     {
-        "key": "shoot_schedule",
-        "name_i18n": {"nl": "Opname plannen", "en": "Shoot schedule"},
-        "color": "#fb7185",
-        # `Lock Casting` advances here.
-        "allowed_from_stage_keys": ["casting"],
-    },
-    {
-        "key": "shoot_in_progress",
-        "name_i18n": {"nl": "Opname bezig", "en": "Shoot in progress"},
+        "key": "shooting",
+        "name_i18n": {"nl": "Opname", "en": "Shooting"},
         "color": "#ef4444",
-        # `shoot_service` advances here when first shoot transitions to IN_PROGRESS.
-        "allowed_from_stage_keys": ["shoot_schedule"],
-    },
-    {
-        "key": "shoot_done",
-        "name_i18n": {"nl": "Opname klaar", "en": "Shoot done"},
-        "color": "#f43f5e",
-        "allowed_from_stage_keys": ["shoot_in_progress"],
+        # `Lock Casting` advances here. Single stage covering the
+        # entire shoot lifecycle (schedule → wrap) — the project stays
+        # on `shooting` until the Director uploads raw cuts.
+        "allowed_from_stage_keys": ["casting"],
     },
     {
         "key": "editing",
         "name_i18n": {"nl": "Montage", "en": "Editing"},
         "color": "#a78bfa",
-        # Raw-cut submission on shoot_done card advances here.
+        # Raw-cut submission on the Shoot tab advances here.
         # `request_changes` from edit_review also bumps back here.
-        "allowed_from_stage_keys": ["shoot_done", "edit_review"],
+        "allowed_from_stage_keys": ["shooting", "edit_review"],
     },
     {
         "key": "edit_review",
@@ -144,10 +133,8 @@ STAGE_TRANSITIONS: list[tuple[str, str]] = [
     ("location_scouting", "draft_idea"),
     ("draft_idea", "script_drafting"),
     ("script_drafting", "casting"),
-    ("casting", "shoot_schedule"),
-    ("shoot_schedule", "shoot_in_progress"),
-    ("shoot_in_progress", "shoot_done"),
-    ("shoot_done", "editing"),
+    ("casting", "shooting"),
+    ("shooting", "editing"),
     ("editing", "edit_review"),
     ("edit_review", "editing"),
     ("edit_review", "approved_published"),
