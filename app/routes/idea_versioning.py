@@ -7,6 +7,7 @@ from typing import Annotated
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
 
 from app.auth.dependencies import (
     CurrentUser,
@@ -22,12 +23,14 @@ from app.schemas.idea import (
     IdeaSignoffPublic,
     IdeaSummaryPublic,
     IdeaVersionPublic,
+    UpdateIdeaVersionBody,
 )
 from app.services import idea_service
 from app.services.idea_service import (
     IdeaAlreadyLockedError,
     IdeaLockGateError,
     IdeaNotFoundError,
+    IdeaVersionNotEditableError,
     IdeaVersionNotFoundError,
     NoEnhancementReviewersError,
 )
@@ -60,6 +63,9 @@ async def get_summary(
     can_lock, pending = await idea_service.lock_gate_status(
         session, project=project
     )
+    reviewer_count = await idea_service.reviewer_count(
+        session, project=project
+    )
     return IdeaSummaryPublic(
         locked_at=idea.locked_at if idea else None,
         locked_by=idea.locked_by if idea else None,
@@ -67,6 +73,7 @@ async def get_summary(
         latest_version_signoffs=signoffs,
         pending_reviewer_ids=pending,
         can_lock=can_lock,
+        reviewer_count=reviewer_count,
     )
 
 
@@ -107,6 +114,43 @@ async def post_version(
             session, project=project, author=user, body_markdown=body.body_markdown
         )
     except IdeaAlreadyLockedError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    await session.commit()
+    await session.refresh(version)
+    return IdeaVersionPublic.model_validate(version)
+
+
+@router.patch(
+    "/versions/{version_id}",
+    response_model=IdeaVersionPublic,
+    summary="Edit the current version body in place (owner-only, pre-feedback)",
+)
+async def patch_version(
+    version_id: uuid.UUID,
+    body: UpdateIdeaVersionBody,
+    project: Annotated[
+        ProjectModel, Depends(require_project_access(ProjectAccess.EDIT))
+    ],
+    user: CurrentUser,
+    session: SessionDep,
+) -> IdeaVersionPublic:
+    if project.owner_id != user.id and not user.is_super_admin:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Only the project owner can edit the draft"
+        )
+    try:
+        version = await idea_service.get_version(session, version_id=version_id)
+    except IdeaVersionNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Idea version not found") from exc
+    try:
+        await idea_service.update_version_body(
+            session,
+            project=project,
+            version=version,
+            actor=user,
+            body_markdown=body.body_markdown,
+        )
+    except IdeaVersionNotEditableError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
     await session.commit()
     await session.refresh(version)
@@ -154,11 +198,42 @@ async def post_signoff(
 # ---------- request enhancement ----------
 
 
+@router.get(
+    "/enhancement-candidates",
+    summary="List CEO + Director members the owner can ask for feedback",
+)
+async def get_enhancement_candidates(
+    project: Annotated[
+        ProjectModel, Depends(require_project_access(ProjectAccess.VIEW))
+    ],
+    session: SessionDep,
+) -> dict[str, list[dict[str, str]]]:
+    rows = await idea_service.list_enhancement_candidates(
+        session, project=project
+    )
+    return {
+        "items": [
+            {
+                "user_id": str(uid),
+                "email": email,
+                "name": name,
+                "role_key": role_key,
+            }
+            for uid, email, name, role_key in rows
+        ],
+    }
+
+
+class _RequestEnhancementBody(BaseModel):
+    reviewer_user_ids: list[uuid.UUID] = Field(default_factory=list)
+
+
 @router.post(
     "/request-enhancement",
-    summary="Pull CEO + Director onto the draft_idea card and email them",
+    summary="Pull the chosen CEO/Director members onto the draft_idea card and email them",
 )
 async def post_request_enhancement(
+    body: _RequestEnhancementBody,
     project: Annotated[
         ProjectModel, Depends(require_project_access(ProjectAccess.EDIT))
     ],
@@ -175,7 +250,10 @@ async def post_request_enhancement(
         )
     try:
         newly_assigned = await idea_service.request_enhancement(
-            session, project=project, actor=user
+            session,
+            project=project,
+            actor=user,
+            reviewer_user_ids=body.reviewer_user_ids,
         )
     except IdeaNotFoundError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc

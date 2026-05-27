@@ -14,8 +14,9 @@ import {
   getIdeaSummary,
   listIdeaVersions,
   lockIdea,
-  requestIdeaEnhancement,
+  updateIdeaVersion,
 } from "@/features/idea_versioning/api";
+import { RequestFeedbackDialog } from "@/features/idea_versioning/components/RequestFeedbackDialog";
 import { SignoffPanel } from "@/features/idea_versioning/components/SignoffPanel";
 import type {
   IdeaSummary,
@@ -43,6 +44,7 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
   const [versions, setVersions] = useState<IdeaVersion[] | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [requestDialogOpen, setRequestDialogOpen] = useState(false);
 
   const canEdit =
     useCanIDo(project.department_id, "project.edit") && canInput;
@@ -68,6 +70,32 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id]);
 
+  // Edit-in-place mode: owner, idea not locked, no reviewers yet,
+  // there's a current version. While true, the textarea is pre-filled
+  // with the current body and saving PATCHes the same version instead
+  // of creating a new V.
+  const canEditInPlace =
+    isOwner &&
+    !!summary &&
+    summary.locked_at === null &&
+    summary.latest_version !== null &&
+    summary.reviewer_count === 0;
+
+  // Pre-fill the draft from the current version whenever we (re)enter
+  // edit-in-place mode for a different version. Tracked by version_id
+  // so saving in place + reloading doesn't wipe what the user just
+  // typed (the body comes back unchanged).
+  const [lastLoadedVersionId, setLastLoadedVersionId] = useState<string | null>(
+    null,
+  );
+  useEffect(() => {
+    if (!canEditInPlace || !summary?.latest_version) return;
+    if (summary.latest_version.id !== lastLoadedVersionId) {
+      setDraft(summary.latest_version.body_markdown);
+      setLastLoadedVersionId(summary.latest_version.id);
+    }
+  }, [canEditInPlace, summary, lastLoadedVersionId]);
+
   async function handleSaveVersion() {
     const body = draft.trim();
     if (!body) {
@@ -89,20 +117,21 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
     }
   }
 
-  async function handleRequestEnhancement() {
+  async function handleSaveInPlace() {
+    if (!summary?.latest_version) return;
+    const body = draft.trim();
+    if (!body) {
+      toast.error("Idea body cannot be empty");
+      return;
+    }
     setBusy(true);
     try {
-      const res = await requestIdeaEnhancement(project.id);
-      const n = res.newly_assigned_user_ids.length;
-      toast.success(
-        n > 0
-          ? `Feedback requested — ${n} reviewer(s) notified by email`
-          : "All reviewers were already assigned",
-      );
+      await updateIdeaVersion(project.id, summary.latest_version.id, body);
+      toast.success("Draft saved");
       await load();
     } catch (err) {
       toast.error(
-        err instanceof ApiError ? err.message : "Failed to request feedback",
+        err instanceof ApiError ? err.message : "Failed to save draft",
       );
     } finally {
       setBusy(false);
@@ -139,9 +168,9 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
         {!locked && isOwner && latest ? (
           <Button
             variant="outline"
-            onClick={handleRequestEnhancement}
+            onClick={() => setRequestDialogOpen(true)}
             disabled={busy}
-            title="Pull CEO + Director onto this card and email them"
+            title="Pick which CEO/Director members to ping for feedback"
           >
             <Send className="size-4" />
             Request feedback
@@ -172,7 +201,11 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
-              {latest ? `Draft idea V${latest.version_number + 1}` : "Draft idea V1"}
+              {!latest
+                ? "Draft idea V1"
+                : canEditInPlace
+                  ? `Draft idea V${latest.version_number} (editing)`
+                  : `Draft idea V${latest.version_number + 1}`}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -181,22 +214,31 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
               onChange={(e) => setDraft(e.target.value)}
               rows={8}
               placeholder={
-                latest
-                  ? "Revise based on the feedback above and save a new version…"
-                  : "Sketch the first version of the idea here. Markdown is fine."
+                !latest
+                  ? "Sketch the first version of the idea here. Markdown is fine."
+                  : canEditInPlace
+                    ? "Edit your draft in place. Saving will overwrite the current version until you request feedback."
+                    : "Revise based on the feedback above and save a new version…"
               }
             />
-            <Button onClick={handleSaveVersion} disabled={busy || !draft.trim()}>
+            <Button
+              onClick={
+                canEditInPlace ? handleSaveInPlace : handleSaveVersion
+              }
+              disabled={busy || !draft.trim()}
+            >
               <Save className="size-4" />
-              {latest
-                ? `Save as V${latest.version_number + 1}`
-                : "Save as V1"}
+              {!latest
+                ? "Save as V1"
+                : canEditInPlace
+                  ? "Save changes"
+                  : `Save as V${latest.version_number + 1}`}
             </Button>
           </CardContent>
         </Card>
       ) : null}
 
-      {latest ? (
+      {latest && !canEditInPlace ? (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">
@@ -219,12 +261,12 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
             />
           </CardContent>
         </Card>
-      ) : (
+      ) : !latest ? (
         <p className="text-muted-foreground text-sm">
           No idea version yet. Save the first draft above to kick off the
           review loop.
         </p>
-      )}
+      ) : null}
 
       {versions.length > 1 ? (
         <Card>
@@ -248,6 +290,13 @@ export function IdeaTab({ project, canInput = true, onProjectUpdated }: Props) {
           </CardContent>
         </Card>
       ) : null}
+
+      <RequestFeedbackDialog
+        project={project}
+        open={requestDialogOpen}
+        onOpenChange={setRequestDialogOpen}
+        onRequested={() => void load()}
+      />
     </div>
   );
 }

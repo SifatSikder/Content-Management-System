@@ -243,14 +243,75 @@ async def _latest_signoff_per_reviewer(
     return latest
 
 
+async def reviewer_count(
+    session: AsyncSession, *, project: ProjectModel
+) -> int:
+    """Count of non-owner active assignees on draft_idea — i.e. how
+    many reviewers the owner has pulled in via Request feedback. Used
+    by the UI to decide whether the owner can still edit the current
+    version in place or has to save a new V."""
+    ids = await _active_reviewer_ids(session, project=project)
+    return len(ids)
+
+
+class IdeaVersionNotEditableError(Exception):
+    """Cannot edit the version body in place — either the idea is
+    locked or reviewers have already been pulled in."""
+
+
+async def update_version_body(
+    session: AsyncSession,
+    *,
+    project: ProjectModel,
+    version: IdeaVersionModel,
+    actor: UserModel,
+    body_markdown: str,
+) -> IdeaVersionModel:
+    """Edit the body of an existing idea version in place. Only allowed
+    while the idea is unlocked AND no reviewers have been pulled in
+    yet (i.e. before the owner has pressed Request feedback). After
+    that, edits start a new version via `add_version`.
+
+    Also enforces: the version must be the LATEST one — we don't allow
+    editing back into older immutable revisions.
+    """
+    idea = await get_idea(session, project=project)
+    if idea is None or idea.locked_at is not None:
+        raise IdeaVersionNotEditableError("Idea is locked")
+    latest = await latest_version(session, project=project)
+    if latest is None or latest.id != version.id:
+        raise IdeaVersionNotEditableError(
+            "Only the latest version can be edited in place"
+        )
+    if await reviewer_count(session, project=project) > 0:
+        raise IdeaVersionNotEditableError(
+            "Reviewers already pulled in — save a new version instead"
+        )
+    version.body_markdown = body_markdown
+    await session.flush()
+    await activity_service.record(
+        session,
+        project_id=project.id,
+        actor_id=actor.id,
+        action="idea.version_edited",
+        metadata={"version_number": version.version_number},
+    )
+    return version
+
+
 async def _active_reviewer_ids(
-    session: AsyncSession, *, project_id: uuid.UUID
+    session: AsyncSession, *, project: ProjectModel
 ) -> list[uuid.UUID]:
+    """Active draft_idea assignees EXCLUDING the project owner — the
+    owner is the author of the idea and doesn't sign off on her own
+    draft. Only the reviewers she pulled in via Request feedback count
+    toward the lock gate."""
     result = await session.execute(
         select(ProjectStageAssignmentModel.user_id)
-        .where(ProjectStageAssignmentModel.project_id == project_id)
+        .where(ProjectStageAssignmentModel.project_id == project.id)
         .where(ProjectStageAssignmentModel.stage_key == "draft_idea")
         .where(ProjectStageAssignmentModel.removed_at.is_(None))
+        .where(ProjectStageAssignmentModel.user_id != project.owner_id)
     )
     return [row[0] for row in result.all()]
 
@@ -260,14 +321,14 @@ async def lock_gate_status(
 ) -> tuple[bool, list[uuid.UUID]]:
     """Return `(can_lock, pending_reviewer_ids)`.
 
-    `can_lock = True` iff every active draft_idea assignee has a
-    `LOOKS_GOOD` signoff on the latest version. Empty version list →
-    `(False, all_reviewers)`.
+    `can_lock = True` iff every active draft_idea reviewer (everyone
+    other than the owner) has a `LOOKS_GOOD` signoff on the latest
+    version. Empty version list → `(False, all_reviewers)`.
     """
     version = await latest_version(session, project=project)
     if version is None:
-        return False, await _active_reviewer_ids(session, project_id=project.id)
-    reviewers = await _active_reviewer_ids(session, project_id=project.id)
+        return False, await _active_reviewer_ids(session, project=project)
+    reviewers = await _active_reviewer_ids(session, project=project)
     if not reviewers:
         # No reviewers configured — anyone can lock. Edge case for misconfigured
         # departments; the route layer can still gate via permissions.
@@ -325,27 +386,19 @@ class NoEnhancementReviewersError(Exception):
     """No CEO / Director members in the department to assign."""
 
 
-async def request_enhancement(
-    session: AsyncSession,
-    *,
-    project: ProjectModel,
-    actor: UserModel,
-) -> list[uuid.UUID]:
-    """Assign CEO + Director (every member holding those role keys in the
-    project's department) to the `draft_idea` stage and email each one.
-
-    Returns the list of newly-assigned user ids. Idempotent: re-running
-    the action when the same reviewers are already active doesn't add
-    duplicate rows (assignment_service.add is upsert-shaped). Email
-    failures are swallowed (logged but don't roll back the assignments).
-    """
-    if await latest_version(session, project=project) is None:
-        raise IdeaNotFoundError(
-            "Save at least one draft version before requesting enhancement"
-        )
-
+async def list_enhancement_candidates(
+    session: AsyncSession, *, project: ProjectModel
+) -> list[tuple[uuid.UUID, str, str, str]]:
+    """Return `(user_id, email, name, role_key)` for every dept member
+    holding a CEO / Director role — the universe the owner can pick
+    from when requesting idea-enhancement feedback."""
     rows = await session.execute(
-        select(DepartmentMembershipModel.user_id, UserModel.email, UserModel.name)
+        select(
+            DepartmentMembershipModel.user_id,
+            UserModel.email,
+            UserModel.name,
+            DepartmentRoleModel.key,
+        )
         .join(
             DepartmentRoleModel,
             DepartmentRoleModel.id == DepartmentMembershipModel.role_id,
@@ -353,12 +406,45 @@ async def request_enhancement(
         .join(UserModel, UserModel.id == DepartmentMembershipModel.user_id)
         .where(DepartmentMembershipModel.department_id == project.department_id)
         .where(DepartmentRoleModel.key.in_(_ENHANCEMENT_REVIEWER_ROLE_KEYS))
+        .order_by(UserModel.name.asc())
     )
-    reviewers = [(row.user_id, row.email, row.name) for row in rows.all()]
-    if not reviewers:
-        raise NoEnhancementReviewersError(
-            "No CEO or Director members to ask for feedback"
+    return [(r.user_id, r.email, r.name, r.key) for r in rows.all()]
+
+
+async def request_enhancement(
+    session: AsyncSession,
+    *,
+    project: ProjectModel,
+    actor: UserModel,
+    reviewer_user_ids: list[uuid.UUID],
+) -> list[uuid.UUID]:
+    """Assign the chosen reviewers (must each hold CEO or Director role
+    in the project's dept) to the `draft_idea` stage and email each one.
+
+    Returns the list of newly-assigned user ids. Idempotent: re-running
+    with the same reviewers doesn't add duplicate rows
+    (assignment_service.add is upsert-shaped). Email failures are
+    swallowed — logged but don't roll back the assignments.
+    """
+    if await latest_version(session, project=project) is None:
+        raise IdeaNotFoundError(
+            "Save at least one draft version before requesting enhancement"
         )
+    if not reviewer_user_ids:
+        raise NoEnhancementReviewersError(
+            "Pick at least one reviewer before requesting feedback"
+        )
+
+    candidates = await list_enhancement_candidates(session, project=project)
+    by_id = {row[0]: row for row in candidates}
+    invalid = [str(uid) for uid in reviewer_user_ids if uid not in by_id]
+    if invalid:
+        raise NoEnhancementReviewersError(
+            f"Not eligible reviewers (must hold CEO or Director role): {invalid}"
+        )
+    reviewers = [
+        (uid, by_id[uid][1], by_id[uid][2]) for uid in reviewer_user_ids
+    ]
 
     newly_assigned: list[uuid.UUID] = []
     for user_id, _email, _name in reviewers:
@@ -419,6 +505,7 @@ __all__ = [
     "IdeaAlreadyLockedError",
     "IdeaLockGateError",
     "IdeaNotFoundError",
+    "IdeaVersionNotEditableError",
     "IdeaVersionNotFoundError",
     "NoEnhancementReviewersError",
     "add_signoff",
@@ -428,7 +515,10 @@ __all__ = [
     "latest_version",
     "list_signoffs",
     "list_versions",
+    "list_enhancement_candidates",
     "lock_gate_status",
     "lock_idea",
     "request_enhancement",
+    "reviewer_count",
+    "update_version_body",
 ]

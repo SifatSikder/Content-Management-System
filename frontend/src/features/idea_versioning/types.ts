@@ -27,6 +27,7 @@ export interface IdeaSummary {
   latest_version_signoffs: IdeaSignoff[];
   pending_reviewer_ids: string[];
   can_lock: boolean;
+  reviewer_count: number;
 }
 
 export interface CreateIdeaVersionBody {

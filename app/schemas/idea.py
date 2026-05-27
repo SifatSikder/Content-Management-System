@@ -54,3 +54,12 @@ class IdeaSummaryPublic(BaseModel):
     # Active assignees on draft_idea that the lock gate is waiting on.
     pending_reviewer_ids: list[uuid.UUID] = Field(default_factory=list)
     can_lock: bool
+    # Total non-owner reviewers currently active on the draft_idea
+    # stage. While zero (and the idea isn't locked), the owner can edit
+    # the current version in place instead of saving a new V; once she
+    # pulls anyone in via Request feedback, edits start a new version.
+    reviewer_count: int = 0
+
+
+class UpdateIdeaVersionBody(BaseModel):
+    body_markdown: str = Field(min_length=1)

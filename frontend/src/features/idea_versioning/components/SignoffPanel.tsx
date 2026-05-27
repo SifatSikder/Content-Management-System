@@ -63,7 +63,10 @@ export function SignoffPanel({
           listDepartmentMembers(project.department_id),
         ]);
         if (cancelled) return;
-        setReviewers(a.items);
+        // The project owner is the author of the idea — she doesn't
+        // sign off on her own draft. Only the reviewers she pulled in
+        // via Request feedback show up here.
+        setReviewers(a.items.filter((r) => r.user_id !== project.owner_id));
         setMembers(m.items);
       } catch {
         if (cancelled) return;
